@@ -1,15 +1,14 @@
-# cow_feed_predictor_pyqt5_columns_with_player.py
 import sys
 from datetime import date
 from pathlib import Path
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
-    QLineEdit, QLabel, QStatusBar, QAbstractItemView, QComboBox
+    QLineEdit, QLabel, QStatusBar, QAbstractItemView, QComboBox, QFileDialog
 )
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 # --- Настройки столбцов ---
 COLUMNS = [
@@ -76,7 +75,7 @@ QLineEdit {
 class CowFeedPredictor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Прогноз молока по рациону коров (PyQt5)")
+        self.setWindowTitle("Прогноз молока по рациону коров (PyQt6)")
         self.resize(1000, 700)
         self.setStyleSheet(STYLE)
 
@@ -99,7 +98,6 @@ class CowFeedPredictor(QMainWindow):
         container.setLayout(main_layout)
         self.setCentralWidget(container)
 
-       # Фрагмент кода из _build_main() с кнопками Excel/PDF по центру
         # Верхняя область: поля Имя / Комплекс / Период
         fields_layout = QHBoxLayout()
         name_lbl = QLabel("Имя:")
@@ -133,7 +131,7 @@ class CowFeedPredictor(QMainWindow):
 
         # Кнопки Excel и PDF по центру
         files_layout = QHBoxLayout()
-        files_layout.addStretch()  # растяжка слева
+        files_layout.addStretch()
         self.excel_btn = QPushButton("Excel")
         self.excel_btn.clicked.connect(self.choose_excel_file)
         self.pdf_btn = QPushButton("PDF")
@@ -141,22 +139,20 @@ class CowFeedPredictor(QMainWindow):
         files_layout.addWidget(self.excel_btn)
         files_layout.addSpacing(10)
         files_layout.addWidget(self.pdf_btn)
-        files_layout.addStretch()  # растяжка справа
+        files_layout.addStretch()
         main_layout.addLayout(files_layout)
 
-
-        
         # Таблица
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         main_layout.addWidget(self.table, 1)
 
-        # Кнопка "Анализировать" большая, по центру
+        # Кнопка "Анализировать"
         analyze_layout = QHBoxLayout()
         analyze_layout.addStretch()
         self.analyze_btn = QPushButton("Анализировать")
@@ -167,7 +163,7 @@ class CowFeedPredictor(QMainWindow):
         analyze_layout.addStretch()
         main_layout.addLayout(analyze_layout)
 
-        # Отдельно: кнопки "Добавить / Удалить"
+        # Кнопки "Добавить / Удалить"
         bottom_layout = QHBoxLayout()
         bottom_layout.addWidget(self._make_button("Добавить строку", self.add_row))
         bottom_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected))
@@ -206,7 +202,7 @@ class CowFeedPredictor(QMainWindow):
             else:
                 item = QTableWidgetItem("")
                 if col in FEATURE_ORDER:
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self.table.setItem(r, c, item)
 
         if default:
@@ -233,9 +229,7 @@ class CowFeedPredictor(QMainWindow):
             self.table.removeRow(row)
         self.statusBar().showMessage(f"Удалено {len(rows)} строк(и).", 3000)
 
-    # Заглушки для Excel / PDF
     def choose_excel_file(self):
-        from PyQt5.QtWidgets import QFileDialog
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
         if not path:
             return
@@ -243,14 +237,12 @@ class CowFeedPredictor(QMainWindow):
         self.statusBar().showMessage(f"Выбран Excel: {Path(path).name}", 4000)
 
     def choose_pdf_file(self):
-        from PyQt5.QtWidgets import QFileDialog
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать PDF", "", "PDF files (*.pdf);;Все файлы (*)")
         if not path:
             return
         self.pdf_path = path
         self.statusBar().showMessage(f"Выбран PDF: {Path(path).name}", 4000)
 
-    # Заглушка для кнопки "Анализировать"
     def analyze_clicked(self):
         name = self.name_edit.text().strip()
         complex_ = self.complex_edit.text().strip()
@@ -265,4 +257,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     win = CowFeedPredictor()
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

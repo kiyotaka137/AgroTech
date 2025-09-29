@@ -94,10 +94,11 @@ def get_pdf_files_with_names(folder_path):
 
 
 if __name__ == "__main__":
-    FOLDER = "data/Для Хакатона/СН"
+    FOLDER = "data/Для Хакатона/Тюмень"
 
     main_prompt = """Это распаршенный текст pdf файла
 Можешь достать оттуда только табличку Рацион и вывести ТОЛЬКО ее в формате .csv с разделителем |
+Без общих значений, если ячейка пустая, все равно добавь ее в таблицу csv
 Выведи без дополнительных слов и кавычек сразу табличку ввиде csv
 Текст:
 {text}
@@ -116,3 +117,5 @@ if __name__ == "__main__":
         queries[base_name] = main_prompt.format(text=text_pdf)
 
     batch_query_deepseek(queries)
+
+#print(len([f for f in os.listdir("parsed_data") if os.path.isfile(os.path.join("parsed_data", f)) and f.endswith(".csv")]))

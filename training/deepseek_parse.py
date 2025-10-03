@@ -94,7 +94,7 @@ def get_pdf_files_with_names(folder_path):
 
 
 if __name__ == "__main__":
-    FOLDER = "data/Для Хакатона/ЭНА"
+    FOLDER = "data/Для Хакатона/СН"
 
     main_prompt = """Это распаршенный текст pdf файла
 Можешь достать оттуда только табличку Рацион и вывести ТОЛЬКО ее в формате .csv с разделителем |

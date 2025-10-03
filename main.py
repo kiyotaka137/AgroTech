@@ -36,43 +36,140 @@ INGREDIENT_TYPES = [
     "Комбинация", "Другое"
 ]
 
+# --- Новый стиль: мягкий графит + акцентная синяя кнопка ---
 STYLE = """
 QMainWindow {
-    background: qlineargradient(x1:0 y1:0, x2:1 y2:1,
-                stop:0 #fbfcfe, stop:1 #eef6fb);
+    background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
+                stop:0 #1f2225, stop:1 #232628);
+    color: #e6eef3;
+    font-family: "Segoe UI", Arial, sans-serif;
 }
-QTableWidget {
-    background: white;
-    border-radius: 8px;
-    alternate-background-color: #f9fbff;
-    gridline-color: #e6eef9;
+
+/* Метки */
+QLabel {
+    color: #e6eef3;
     font-size: 13px;
 }
+
+/* Таблица — карточка */
+QTableWidget {
+    background-color: qlineargradient(x1:0 y1:0 x2:0 y2:1, stop:0 #222526, stop:1 #1f2325);
+    color: #e9f0f5;
+    gridline-color: #2f3336;
+    alternate-background-color: #282b2d;
+    border: 1px solid rgba(255,255,255,0.02);
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 13px;
+}
+
+/* Заголовок таблицы */
 QHeaderView::section {
-    background-color: #2b73d1;
-    color: white;
-    padding: 6px;
+    background-color: rgba(48,52,56,0.95);
+    color: #e9f0f5;
+    padding: 8px;
     border: 0px;
-    font-weight: bold;
+    font-weight: 700;
+    font-size: 13px;
 }
+
+/* Выделение строки */
+QTableWidget::item:selected {
+    background: qlineargradient(x1:0 y1:0 x2:1 y2:0,
+                stop:0 rgba(38,90,140,0.18), stop:1 rgba(38,90,140,0.12));
+    color: #ffffff;
+}
+
+/* Подсветка при наведении (эмуляция) */
+QTableWidget::item:hover {
+    background-color: rgba(255,255,255,0.02);
+}
+
+/* Общие кнопки (вторичные) */
 QPushButton {
-    background-color: #2b73d1;
-    color: white;
+    background-color: #2b2c2e;
+    color: #e9f0f5;
     border-radius: 8px;
-    padding: 10px;
+    padding: 10px 14px;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
+    border: 1px solid rgba(255,255,255,0.03);
+    min-height: 36px;
+    min-width: 80px;
 }
-QPushButton:hover { background-color: #1f5fb0; }
+
+/* hover / pressed для вторичных */
+QPushButton:hover {
+    background-color: #34363a;
+}
+QPushButton:pressed {
+    background-color: #232526;
+}
+
+/* Акцентная кнопка (primary) — Анализировать */
+QPushButton[primary="true"] {
+    background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
+                stop:0 #2b6fb0, stop:1 #1f5ea0);
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 12px 18px;
+    font-size: 15px;
+    min-height: 46px;
+    min-width: 420px;
+    border-radius: 10px;
+}
+QPushButton[primary="true"]:hover {
+    background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
+                stop:0 #3180c4, stop:1 #246aa8);
+}
+QPushButton[primary="true"]:pressed {
+    background: #184b78;
+}
+
+/* Поля ввода */
 QLineEdit {
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #3a3d40;
+    background: #202425;
+    color: #e9f0f5;
+    selection-background-color: #2b6fb0;
+}
+QLineEdit:focus {
+    border: 1px solid #2b6fb0;
+}
+QLineEdit::placeholder {
+    color: #98a0a6;
+}
+
+/* ComboBox */
+QComboBox {
+    background-color: #202425;
+    color: #e9f0f5;
+    border: 1px solid #3a3d40;
+    border-radius: 8px;
     padding: 6px;
-    border-radius: 6px;
-    border: 1px solid #cbdff6;
-    background: #ffffff;
+}
+QComboBox QAbstractItemView {
+    background-color: #25292b;
+    selection-background-color: #2b6fb0;
+    color: #e9f0f5;
+}
+
+/* Status bar */
+QStatusBar {
+    background-color: transparent;
+    color: #98a0a6;
+    padding: 6px;
+}
+
+/* Немного отступов вокруг виджетов */
+QWidget#container {
+    padding: 12px;
 }
 """
 
-class CowFeedPredictor(QMainWindow):
+class NewReport(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Прогноз молока по рациону коров (PyQt6)")
@@ -94,6 +191,7 @@ class CowFeedPredictor(QMainWindow):
 
     def _build_main(self):
         container = QWidget()
+        container.setObjectName("container")  # чтобы QSS мог при желании стилизовать контейнер
         main_layout = QVBoxLayout()
         container.setLayout(main_layout)
         self.setCentralWidget(container)
@@ -150,12 +248,16 @@ class CowFeedPredictor(QMainWindow):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        # Немного улучшений поведения заголовка
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.table, 1)
 
-        # Кнопка "Анализировать"
+        # Кнопка "Анализировать" (акцентная)
         analyze_layout = QHBoxLayout()
         analyze_layout.addStretch()
         self.analyze_btn = QPushButton("Анализировать")
+        # пометка в стиле — primary
+        self.analyze_btn.setProperty("primary", True)
         self.analyze_btn.setFixedHeight(50)
         self.analyze_btn.setMinimumWidth(400)
         self.analyze_btn.clicked.connect(self.analyze_clicked)
@@ -255,6 +357,6 @@ class CowFeedPredictor(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    win = CowFeedPredictor()
+    win = NewReport()
     win.show()
     sys.exit(app.exec())

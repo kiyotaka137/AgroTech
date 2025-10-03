@@ -143,7 +143,6 @@ class MainWindow(QWidget):
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
 
-        self.report_window = None
 
     def toggle_history(self):
         """Сворачивает истроию отчетов"""
@@ -162,9 +161,9 @@ class MainWindow(QWidget):
 
     def create_new_report(self):
         # создаём экземпляр CowFeedPredictor и показываем
-        self.report_window = NewReport()
-        self.report_window.show()
-
+        dialog = NewReport()
+        dialog.exec()
+        
     def display_report(self, item):
         """
         Загружает выбранный отчет и отображает его в вкладках

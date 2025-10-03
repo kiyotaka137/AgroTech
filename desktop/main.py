@@ -9,6 +9,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt
 
 from report_loader import ReportLoader
+from new_report_window import NewReport
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -46,13 +47,14 @@ class MainWindow(QWidget):
 
         # Кнопка "Добавить" с иконкой
         btn_add_history = QPushButton()
-        btn_add_history.setIcon(QIcon("icons/add_report.png"))
+        btn_add_history.setIcon(QIcon("desktop/icons/add_report.png"))
         btn_add_history.setIconSize(QtCore.QSize(20, 20))  # размер иконки
         btn_add_history.setFixedSize(25, 25)
+        btn_add_history.clicked.connect(self.create_new_report)
 
         # Кнопка "Закрыть/назад" с иконкой
         btn_close_history = QPushButton()
-        btn_close_history.setIcon(QIcon("icons/close_history.png"))
+        btn_close_history.setIcon(QIcon("desktop/icons/close_history.png"))
         btn_close_history.setIconSize(QtCore.QSize(20, 20))
         btn_close_history.setFixedSize(25, 25)
         btn_close_history.clicked.connect(self.toggle_history)
@@ -71,7 +73,7 @@ class MainWindow(QWidget):
         input_search.setObjectName("searchInput")
 
         btn_search = QPushButton()
-        btn_search.setIcon(QIcon("icons/search.png"))
+        btn_search.setIcon(QIcon("desktop/icons/search.png"))
         btn_search.setFixedSize(30, 30)
 
         search_layout.addWidget(input_search)
@@ -82,7 +84,6 @@ class MainWindow(QWidget):
         # Список
         self.history_list = QListWidget()
         self.history_list.setObjectName("historyList")
-        #history_list.addItems(["Отчет 1", "Отчет 2", "Отчет 3"])
         
 
         # Компоновка
@@ -142,6 +143,8 @@ class MainWindow(QWidget):
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
 
+        self.report_window = None
+
     def toggle_history(self):
         """Сворачивает истроию отчетов"""
         if self.history_widget.isVisible():
@@ -156,6 +159,11 @@ class MainWindow(QWidget):
         for report_file in report_files:
             self.history_list.addItem(report_file.stem)
         self.toggle_history()
+
+    def create_new_report(self):
+        # создаём экземпляр CowFeedPredictor и показываем
+        self.report_window = NewReport()
+        self.report_window.show()
 
     def display_report(self, item):
         """

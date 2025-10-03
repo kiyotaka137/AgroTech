@@ -25,137 +25,137 @@ INGREDIENT_TYPES = [
     "Комбинация", "Другое"
 ]
 
-STYLE = STYLE = """
-QMainWindow {
-    background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
-                stop:0 #1f2225, stop:1 #232628);
-    color: #e6eef3;
-    font-family: "Segoe UI", Arial, sans-serif;
-}
+STYLE = """"""
+# QMainWindow {
+#     background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
+#                 stop:0 #1f2225, stop:1 #232628);
+#     color: #e6eef3;
+#     font-family: "Segoe UI", Arial, sans-serif;
+# }
 
-/* Метки */
-QLabel {
-    color: #e6eef3;
-    font-size: 13px;
-}
+# /* Метки */
+# QLabel {
+#     color: #e6eef3;
+#     font-size: 13px;
+# }
 
-/* Таблица — карточка */
-QTableWidget {
-    background-color: qlineargradient(x1:0 y1:0 x2:0 y2:1, stop:0 #222526, stop:1 #1f2325);
-    color: #e9f0f5;
-    gridline-color: #2f3336;
-    alternate-background-color: #282b2d;
-    border: 1px solid rgba(255,255,255,0.02);
-    border-radius: 10px;
-    padding: 8px;
-    font-size: 13px;
-}
+# /* Таблица — карточка */
+# QTableWidget {
+#     background-color: qlineargradient(x1:0 y1:0 x2:0 y2:1, stop:0 #222526, stop:1 #1f2325);
+#     color: #e9f0f5;
+#     gridline-color: #2f3336;
+#     alternate-background-color: #282b2d;
+#     border: 1px solid rgba(255,255,255,0.02);
+#     border-radius: 10px;
+#     padding: 8px;
+#     font-size: 13px;
+# }
 
-/* Заголовок таблицы */
-QHeaderView::section {
-    background-color: rgba(48,52,56,0.95);
-    color: #e9f0f5;
-    padding: 8px;
-    border: 0px;
-    font-weight: 700;
-    font-size: 13px;
-}
+# /* Заголовок таблицы */
+# QHeaderView::section {
+#     background-color: rgba(48,52,56,0.95);
+#     color: #e9f0f5;
+#     padding: 8px;
+#     border: 0px;
+#     font-weight: 700;
+#     font-size: 13px;
+# }
 
-/* Выделение строки */
-QTableWidget::item:selected {
-    background: qlineargradient(x1:0 y1:0 x2:1 y2:0,
-                stop:0 rgba(38,90,140,0.18), stop:1 rgba(38,90,140,0.12));
-    color: #ffffff;
-}
+# /* Выделение строки */
+# QTableWidget::item:selected {
+#     background: qlineargradient(x1:0 y1:0 x2:1 y2:0,
+#                 stop:0 rgba(38,90,140,0.18), stop:1 rgba(38,90,140,0.12));
+#     color: #ffffff;
+# }
 
-/* Подсветка при наведении (эмуляция) */
-QTableWidget::item:hover {
-    background-color: rgba(255,255,255,0.02);
-}
+# /* Подсветка при наведении (эмуляция) */
+# QTableWidget::item:hover {
+#     background-color: rgba(255,255,255,0.02);
+# }
 
-/* Общие кнопки (вторичные) */
-QPushButton {
-    background-color: #2b2c2e;
-    color: #e9f0f5;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-weight: 600;
-    font-size: 13px;
-    border: 1px solid rgba(255,255,255,0.03);
-    min-height: 36px;
-    min-width: 80px;
-}
+# /* Общие кнопки (вторичные) */
+# QPushButton {
+#     background-color: #2b2c2e;
+#     color: #e9f0f5;
+#     border-radius: 8px;
+#     padding: 10px 14px;
+#     font-weight: 600;
+#     font-size: 13px;
+#     border: 1px solid rgba(255,255,255,0.03);
+#     min-height: 36px;
+#     min-width: 80px;
+# }
 
-/* hover / pressed для вторичных */
-QPushButton:hover {
-    background-color: #34363a;
-}
-QPushButton:pressed {
-    background-color: #232526;
-}
+# /* hover / pressed для вторичных */
+# QPushButton:hover {
+#     background-color: #34363a;
+# }
+# QPushButton:pressed {
+#     background-color: #232526;
+# }
 
-/* Акцентная кнопка (primary) — Анализировать */
-QPushButton[primary="true"] {
-    background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
-                stop:0 #2b6fb0, stop:1 #1f5ea0);
-    color: #ffffff;
-    border: 1px solid rgba(255,255,255,0.06);
-    padding: 12px 18px;
-    font-size: 15px;
-    min-height: 46px;
-    min-width: 420px;
-    border-radius: 10px;
-}
-QPushButton[primary="true"]:hover {
-    background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
-                stop:0 #3180c4, stop:1 #246aa8);
-}
-QPushButton[primary="true"]:pressed {
-    background: #184b78;
-}
+# /* Акцентная кнопка (primary) — Анализировать */
+# QPushButton[primary="true"] {
+#     background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
+#                 stop:0 #2b6fb0, stop:1 #1f5ea0);
+#     color: #ffffff;
+#     border: 1px solid rgba(255,255,255,0.06);
+#     padding: 12px 18px;
+#     font-size: 15px;
+#     min-height: 46px;
+#     min-width: 420px;
+#     border-radius: 10px;
+# }
+# QPushButton[primary="true"]:hover {
+#     background: qlineargradient(x1:0 y1:0 x2:0 y2:1,
+#                 stop:0 #3180c4, stop:1 #246aa8);
+# }
+# QPushButton[primary="true"]:pressed {
+#     background: #184b78;
+# }
 
-/* Поля ввода */
-QLineEdit {
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid #3a3d40;
-    background: #202425;
-    color: #e9f0f5;
-    selection-background-color: #2b6fb0;
-}
-QLineEdit:focus {
-    border: 1px solid #2b6fb0;
-}
-QLineEdit::placeholder {
-    color: #98a0a6;
-}
+# /* Поля ввода */
+# QLineEdit {
+#     padding: 8px;
+#     border-radius: 8px;
+#     border: 1px solid #3a3d40;
+#     background: #202425;
+#     color: #e9f0f5;
+#     selection-background-color: #2b6fb0;
+# }
+# QLineEdit:focus {
+#     border: 1px solid #2b6fb0;
+# }
+# QLineEdit::placeholder {
+#     color: #98a0a6;
+# }
 
-/* ComboBox */
-QComboBox {
-    background-color: #202425;
-    color: #e9f0f5;
-    border: 1px solid #3a3d40;
-    border-radius: 8px;
-    padding: 6px;
-}
-QComboBox QAbstractItemView {
-    background-color: #25292b;
-    selection-background-color: #2b6fb0;
-    color: #e9f0f5;
-}
+# /* ComboBox */
+# QComboBox {
+#     background-color: #202425;
+#     color: #e9f0f5;
+#     border: 1px solid #3a3d40;
+#     border-radius: 8px;
+#     padding: 6px;
+# }
+# QComboBox QAbstractItemView {
+#     background-color: #25292b;
+#     selection-background-color: #2b6fb0;
+#     color: #e9f0f5;
+# }
 
-/* Status bar */
-QStatusBar {
-    background-color: transparent;
-    color: #98a0a6;
-    padding: 6px;
-}
+# /* Status bar */
+# QStatusBar {
+#     background-color: transparent;
+#     color: #98a0a6;
+#     padding: 6px;
+# }
 
-/* Немного отступов вокруг виджетов */
-QWidget#container {
-    padding: 12px;
-}
-"""
+# /* Немного отступов вокруг виджетов */
+# QWidget#container {
+#     padding: 12px;
+# }
+# """
 
 class NewReport(QDialog):
     def __init__(self, parent=None):

@@ -1,0 +1,160 @@
+/* === Общие стили === */
+QDialog {
+    background-color: #fafafa;
+    color: #222;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13px;
+}
+
+/* Контейнер */
+QWidget#container {
+    background-color: #ffffff;
+    border: 1px solid #e6e6e6;
+    padding: 18px; 
+    margin: 8px;   
+}
+
+
+/* === Метки === */
+QLabel {
+    color: #333;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* === Поля ввода === */
+QLineEdit {
+    background: #ffffff;
+    border: 1px solid #dcdcdc;
+    border-radius: 0px;
+    padding: 6px 8px;
+    color: #333;
+}
+
+QLineEdit:focus {
+    border: 1px solid #66aaff;
+    background: #ffffff;
+}
+
+QLineEdit::placeholder {
+    color: #999;
+}
+
+/* === ComboBox === */
+QComboBox {
+    background: #ffffff;
+    border: 1px solid #dcdcdc;
+    border-radius: 0px;
+    padding: 5px 8px;
+    color: #333;
+}
+
+QComboBox:focus {
+    border: 1px solid #66aaff;
+}
+
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    border: 1px solid #dcdcdc;
+    selection-background-color: #dce9ff;
+    color: #000;
+}
+
+/* === Таблица === */
+QTableWidget {
+    background: #ffffff;
+    alternate-background-color: #f7f7f7;
+    gridline-color: #e6e6e6;
+    border: 1px solid #e6e6e6;
+    color: #222;
+    font-size: 13px;
+}
+
+QHeaderView::section {
+    background-color: #f5f5f5;
+    color: #333;
+    border: none;
+    border-bottom: 1px solid #e6e6e6;
+    font-weight: 600;
+    padding: 6px;
+}
+
+QTableWidget::item:selected {
+    background-color: #dce9ff;
+    color: #000;
+}
+
+/* === Кнопки === */
+QPushButton {
+    background: #f5f5f5;
+    border: 1px solid #dcdcdc;
+    border-radius: 0px;
+    color: #333;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 80px;
+}
+
+QPushButton:hover {
+    background-color: #eaeaea;
+}
+
+QPushButton:pressed {
+    background-color: #dcdcdc;
+}
+
+/* === Акцентная кнопка (primary) === */
+QPushButton[primary="true"] {
+    background-color: #66aaff;
+    border: 1px solid #66aaff;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 15px;
+    min-height: 46px;
+    border-radius: 4px;
+}
+
+QPushButton[primary="true"]:hover {
+    background-color: #5b9ef5;
+}
+
+QPushButton[primary="true"]:pressed {
+    background-color: #4a8de5;
+}
+
+/* === Status Label === */
+QLabel#status_label {
+    color: #666;
+    font-size: 12px;
+    padding: 4px 2px;
+}
+
+/* === File Dialog Buttons (Excel / PDF) === */
+QPushButton#excel_btn, QPushButton#pdf_btn {
+    min-width: 100px;
+}
+
+/* === Scrollbars === */
+QScrollBar:vertical {
+    border: none;
+    background: #f5f5f5;
+    width: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #cccccc;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #bbbbbb;
+}
+
+/* === Tooltip === */
+QToolTip {
+    background-color: #ffffff;
+    color: #222;
+    border: 1px solid #dcdcdc;
+    padding: 4px;
+    font-size: 12px;
+}

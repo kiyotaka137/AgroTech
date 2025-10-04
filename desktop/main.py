@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt
 from report_loader import ReportLoader
 from new_report_window import NewReport
 from report_list_item import ReportListItem  # отдельный виджет для элемента списка
+from ration_table_widget import RationTableWidget
 
 
 class MainWindow(QWidget):
@@ -109,19 +110,13 @@ class MainWindow(QWidget):
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
 
-        tab_ration = QTextEdit("Здесь содержимое вкладки 'Рацион'")
-        tab_ration.setContentsMargins(0, 0, 0, 0)
-        tab_ration.setViewportMargins(0, 0, 0, 0)
+        # --- Вкладка Рацион ---
+        self.tab_ration = RationTableWidget()
+        tabs.addTab(self.tab_ration, "Рацион")
 
-        tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
-        tab_report.setContentsMargins(0, 0, 0, 0)
-        tab_report.setViewportMargins(0, 0, 0, 0)
-
-        tabs.addTab(tab_ration, "Рацион")
-        tabs.addTab(tab_report, "Отчет")
-
-        self.tab_ration = tab_ration
-        self.tab_report = tab_report
+        # --- Вкладка Отчет ---
+        self.tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
+        tabs.addTab(self.tab_report, "Отчет")
 
         report_layout.addWidget(tabs)
         report_widget = QWidget()
@@ -185,7 +180,6 @@ class MainWindow(QWidget):
         dialog.exec()
 
     def display_report(self, item):
-        """Загружает выбранный отчет и отображает его в вкладках"""
         widget = self.history_list.itemWidget(item)
         if widget is None:
             return
@@ -200,10 +194,11 @@ class MainWindow(QWidget):
             print(f"Файл {filename} не найден")
             return
 
+        # === Рацион ===
         ration_array = report_data.get("ration", [])
-        ration_text = "\n".join("\t".join(map(str, row)) for row in ration_array)
-        self.tab_ration.setPlainText(ration_text)
+        self.tab_ration.load_from_json(ration_array)
 
+        # === Текстовый отчет ===
         report_text = report_data.get("report_text", "")
         self.tab_report.setPlainText(report_text)
 
@@ -212,7 +207,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # Подключаем QSS
-    with open("desktop/styles_light.qss", "r", encoding="utf-8") as f:
+    with open("desktop/styles/styles_light.qss", "r", encoding="utf-8") as f:
         app.setStyleSheet(f.read())
 
     window = MainWindow()

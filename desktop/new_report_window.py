@@ -89,8 +89,13 @@ class NewReport(QDialog):
         # Кнопки Excel
         files_layout = QHBoxLayout()
         files_layout.addStretch()
+
         self.excel_btn = QPushButton("Excel"); self.excel_btn.clicked.connect(self.choose_excel_file)
+        self.pdf_btn = QPushButton("PDF"); self.pdf_btn.clicked.connect(self.choose_pdf_file)
+
         files_layout.addWidget(self.excel_btn)
+        files_layout.addWidget(self.pdf_btn)
+
         files_layout.addStretch()
         main_layout.addLayout(files_layout)
 
@@ -208,7 +213,13 @@ class NewReport(QDialog):
             self.table.removeRow(row)
         self.status_label.setText(f"Удалено {len(rows)} строк(и).")
 
-    def choose_excel_file(self):
+    def choose_excel_file(self):  # todo: загрузка excel таблицы в self.table использовать parse_excel из data_utils можно импортить как from data_utils
+        path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
+        if path:
+            self.excel_path = path
+            self.status_label.setText(f"Выбран Excel: {Path(path).name}")
+
+    def choose_pdf_file(self):  # todo: загрузка pdf таблицы в self.table, аналогично excel
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
         if path:
             self.excel_path = path

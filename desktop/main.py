@@ -212,14 +212,17 @@ class MainWindow(QWidget):
         # Попытаемся получить мета-инфо через loader
         info = {}
         try:
-            info = self.report_loader.get_report_info(report_file) or {}
+            info = self.report_loader.load_report(report_file) or {}
         except Exception:
             info = {}
 
+
         # Берём поля, если они есть
-        name = info.get("name") if isinstance(info, dict) else None
-        complex_ = info.get("complex") if isinstance(info, dict) else None
-        period = info.get("period") if isinstance(info, dict) else None
+        meta_info = info.get("meta", {})
+        name = meta_info.get("name") if isinstance(info, dict) else None # todo: чекнуть почему срабатывает if снизу и нет норм имени
+        complex_ = meta_info.get("complex") if isinstance(info, dict) else None
+        period = meta_info.get("period") if isinstance(info, dict) else None
+
 
         # Если полей нет — парсим имя файла (без расширения)
         if not (name or complex_ or period):
@@ -244,18 +247,12 @@ class MainWindow(QWidget):
         display_name = "_".join(parts) if parts else Path(report_file).stem
 
         # форматируем дату
-        modified = info.get("modified")
-        try:
-            if hasattr(modified, "strftime"):
-                modified_str = modified.strftime("%Y-%m-%d")
-            else:
-                # если modified это timestamp
-                modified_str = str(modified)
-        except Exception:
-            modified_str = ""
+        #last_time_refactor = self.report_loader.get_report_info(report_file)["modified"]
+        last_time_refactor = str(meta_info.get("created_at"))[:10] # todo: сделать чтоб время после модификации появлялось
+
 
         # Создаём виджет и item
-        widget = ReportListItem(display_name, modified_str)
+        widget = ReportListItem(display_name, last_time_refactor)
         item = QListWidgetItem()
         item.setSizeHint(widget.sizeHint())
 

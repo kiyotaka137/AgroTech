@@ -6,7 +6,8 @@ from PyQt6 import QtCore
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLineEdit, QLabel, QListWidget,
-    QTabWidget, QTextEdit, QSplitter, QListWidgetItem
+    QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
+    QStackedWidget
 )
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, QFileSystemWatcher
@@ -107,7 +108,7 @@ class MainWindow(QWidget):
         }
         """)
         self.history_list.itemClicked.connect(self.display_report)
-
+        
         # Компоновка
         history_layout.addLayout(header_layout)
         history_layout.addLayout(search_layout)
@@ -129,10 +130,19 @@ class MainWindow(QWidget):
 
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
+        self.tabs = tabs  # сохранить ссылку на TabWidget
 
         # --- Вкладка Рацион ---
-        self.tab_ration = RationTableWidget()
-        tabs.addTab(self.tab_ration, "Рацион")
+        # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
+        self.tab_ration_widget = RationTableWidget()
+        self.tab_ration_debug = QTextEdit()
+        self.tab_ration_debug.setReadOnly(True)
+
+        self.ration_stack = QStackedWidget()
+        self.ration_stack.addWidget(self.tab_ration_widget)  # 0
+        self.ration_stack.addWidget(self.tab_ration_debug)   # 1
+
+        tabs.addTab(self.ration_stack, "Рацион")
 
         # --- Вкладка Отчет ---
         self.tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
@@ -322,11 +332,35 @@ class MainWindow(QWidget):
             return
 
         # === Рацион ===
-        ration_array = report_data.get("ration", [])
+        ration_array = report_data.get("ration", None)
+
+        shown = False
+        # Попробуем загрузить через специализированный метод рациона
         try:
-            self.tab_ration.load_from_json(ration_array)
+            if ration_array is not None and hasattr(self.tab_ration_widget, "load_from_json"):
+                self.tab_ration_widget.load_from_json(ration_array)
+                self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
+                shown = True
         except Exception as e:
-            print(f"Ошибка загрузки рациона: {e}")
+            print(f"Ошибка при загрузке рациона через load_from_json: {e}")
+            shown = False
+
+        if not shown:
+            # fallback: показать сырой текст файла (или repr данных)
+            raw = None
+            try:
+                # пытаемся открыть файл как текст
+                with open(report_file, "r", encoding="utf-8") as f:
+                    raw = f.read()
+            except Exception:
+                try:
+                    raw = str(report_data)
+                except Exception:
+                    raw = "Не удалось прочитать содержимое файла."
+
+            # отображаем в QTextEdit (страница 1)
+            self.tab_ration_debug.setPlainText(raw)
+            self.ration_stack.setCurrentIndex(1)
 
         # === Текстовый отчет ===
         report_text = report_data.get("report_text", "")

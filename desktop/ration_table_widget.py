@@ -17,38 +17,6 @@ INGREDIENT_TYPES = [
     "Комбинация", "Другое"
 ]
 
-# Стиль для обычных кнопок с рамкой
-border_button_style = """
-QPushButton {
-    background-color: #ffffff;  /* белый фон */
-    border: 1px solid #ccc;    /* светлая рамка */
-    border-radius: 4px;
-    padding: 4px 8px;
-}
-QPushButton:hover {
-    background-color: #f0f0f0;
-}
-QPushButton:pressed {
-    background-color: #e0e0e0;
-}
-"""
-
-# Стиль для кнопки primary (синяя заливка)
-primary_button_style = """
-QPushButton[primary="true"] {
-    background-color: #0078d7;   /* синий */
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 6px 12px;
-}
-QPushButton[primary="true"]:hover {
-    background-color: #005fa1;
-}
-QPushButton[primary="true"]:pressed {
-    background-color: #004c80;
-}
-"""
 
 class RationTableWidget(QWidget):
     """Виджет таблицы рациона с кнопками и JSON-совместимостью."""
@@ -72,7 +40,7 @@ class RationTableWidget(QWidget):
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
         main_layout.addWidget(self.table)
 
-                # === Нижняя панель: кнопки + статус ===
+        # === Нижняя панель: кнопки + статус ===
         bottom_layout = QHBoxLayout()
         bottom_layout.setContentsMargins(0, 0, 0, 0)  # панель без внутренних отступов
         bottom_layout.setSpacing(10)
@@ -84,10 +52,17 @@ class RationTableWidget(QWidget):
 
         # Горизонтальный блок кнопок
         btns_layout = QHBoxLayout()
-        btns_layout.setContentsMargins(0, 0, 0, 0)  # 2px сверху до кнопок
+        btns_layout.setContentsMargins(0, 0, 0, 0)
         btns_layout.setSpacing(8)
+
         add_btn = self._make_button("Добавить строку", self.add_row)
+        add_btn.setObjectName("addRowBtn")
+        add_btn.setProperty("class", "borderButton")   # 🔹 добавляем класс для рамки
+
         remove_btn = self._make_button("Удалить выделенные", self.remove_selected)
+        remove_btn.setObjectName("removeRowBtn")
+        remove_btn.setProperty("class", "borderButton")  # 🔹 рамка
+
         btns_layout.addWidget(add_btn)
         btns_layout.addWidget(remove_btn)
         btns_layout.addStretch()
@@ -105,10 +80,14 @@ class RationTableWidget(QWidget):
         # Кнопка "Анализировать" справа
         analyze_btn = QPushButton("Анализировать")
         analyze_btn.setProperty("primary", True)
-        analyze_btn.setFixedSize(200, 44)
+        analyze_btn.setFixedSize(160, 36)  # 🔹 уменьшили размер
+
         analyze_btn.clicked.connect(self.analyze_clicked)
-        analyze_btn.setContentsMargins(0,0,0,0)
+
+        # Добавим небольшой отступ справа и снизу
+        bottom_layout.addStretch()  # чтобы кнопка прижалась к правой стороне
         bottom_layout.addWidget(analyze_btn)
+        bottom_layout.setContentsMargins(5, 5, 5, 5)  
         
 
         main_layout.addLayout(bottom_layout)

@@ -5,33 +5,70 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut
 
 
-from training import name_mapping, uniq_ration
+from training import name_mapping, change_mapping, uniq_ration, uniq_step, uniq_changed_ration
 
-target_path = "../data/Для Хакатона/targets.csv"
-rations_path = "../parsed_data/{table}.csv"
+target_path = "training/data/Для Хакатона/targets.csv"
+rations_path = "training/parsed_data/{table}.csv"
+step_path = "training/parsed_data/step_analize/{table}.csv"
 
-
-def get_ohe_train_test_data(column_coef="% СВ"):  # todo: сделать выбор таргетов множественным
+def get_ohe_train_test_data(mapping=name_mapping, uniq=uniq_ration, column_coef="% СВ", target_col="Лауриновая"):  # todo: сделать выбор таргетов множественным
     targets = pd.read_csv(target_path, sep=";")
-    uniq_dict = {elem: ind for ind, elem in enumerate(uniq_ration)}
+    uniq_dict = {elem: ind for ind, elem in enumerate(uniq)}
     data = []
 
     for table, elem in enumerate(targets["Рацион"].values):
-        row = [0] * len(uniq_ration) + [targets.loc[table, "Лауриновая"]]
+        row = [0] * len(uniq) + [targets.loc[table, target_col]]
 
         if elem[-1] == '.':
             elem = elem[:-1]
         ration = pd.read_csv(rations_path.format(table=elem.strip()), sep="|")
 
         for i, ingr in enumerate(ration["Ингредиенты"]):
-            clear_elem = name_mapping[ingr]
+            clear_elem = mapping[ingr]
             row[uniq_dict[clear_elem]] += float(ration.loc[i, column_coef].replace(",", "."))
 
         data.append(row)
 
-    columns = uniq_ration + ["target"]
+    columns = uniq + ["target"]
     df = pd.DataFrame(data, columns=columns)
-    return dfw
+    return df
+
+
+def get_ohe_step_data(mapping=change_mapping(), uniq=uniq_changed_ration, column_coef="% СВ", target_col="Лауриновая"):
+    targets = pd.read_csv(target_path, sep=";")
+    uniq_dict = {elem: ind for ind, elem in enumerate(uniq)}
+    uniq_step_dict = {elem: ind + len(uniq) for ind, elem in enumerate(uniq_step)}
+
+    data = []
+
+    for table, elem in enumerate(targets["Рацион"].values):
+        row = [0] * (len(uniq) + len(uniq_step))
+
+        if elem[-1] == '.':
+            elem = elem[:-1]
+        ration = pd.read_csv(rations_path.format(table=elem.strip()), sep="|")
+        step_data = pd.read_csv(step_path.format(table=elem.strip()), sep="|")
+
+        for i, ingr in enumerate(ration["Ингредиенты"]):
+            clear_elem = mapping[ingr]
+            row[uniq_dict[clear_elem]] += float(ration.loc[i, column_coef].replace(",", "."))
+
+        for i, elem in enumerate(step_data.iloc[:, 0].values):
+            val_elem = step_data.iloc[i, 1]
+
+            if not val_elem or (type(val_elem) == str and not val_elem.strip()):
+                val_elem = np.nan
+            elif type(val_elem) == str:
+                val_elem = float(val_elem.replace(",", "."))
+
+            row[uniq_step_dict[elem]] += val_elem
+
+        row += [targets.loc[table, target_col]]
+        data.append(row)
+
+    columns = uniq + uniq_step + ["target"]
+    df = pd.DataFrame(data, columns=columns)
+    return df
 
 
 def minimal_infer():
@@ -39,7 +76,8 @@ def minimal_infer():
 
 
 if __name__ == "__main__":
-    dataset = get_ohe_train_test_data()
+    dataset = get_ohe_step_data()
+    print(dataset)
     loocv = True
     cv = True
 

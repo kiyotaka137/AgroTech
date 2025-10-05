@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import joblib as jl
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut
@@ -76,8 +77,7 @@ def minimal_infer():
 
 
 if __name__ == "__main__":
-    dataset = get_ohe_step_data()
-    print(dataset)
+    dataset = get_ohe_train_test_data()
     loocv = True
     cv = True
 
@@ -112,6 +112,7 @@ if __name__ == "__main__":
 
         final_model = Lasso(alpha=0.5)
         final_model.fit(X, y)
+        jl.dump(final_model, "models/classic_pipe/lasso_model.pkl")
 
         print(uniq_ration)
         print(final_model.coef_)
@@ -119,7 +120,6 @@ if __name__ == "__main__":
         for p, t in zip(y_pred, y_true):
             print(round(p, 2), t)
         print(f"RMSE: {rmse}, R2: {r2}")
-
 
     elif cv:
         X = dataset.drop("target", axis=1)

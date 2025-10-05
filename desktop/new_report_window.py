@@ -14,10 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QMovie
 from PyQt6.QtCore import (Qt, QTimer, QSize)
 
-# --- Настройки столбцов ---
-COLUMNS = [
-    "Ингредиенты", "СВ %", "ГП кг", "%ГП", "%СВ"
-]
+from data_utils import COLUMNS, parse_excel_ration, parse_pdf_for_tables
 
 
 class NewReport(QDialog):
@@ -62,6 +59,7 @@ class NewReport(QDialog):
         self.setLayout(main_layout)
 
         # Поля ввода
+        # Поля ввода
         fields_layout = QHBoxLayout()
         name_lbl = QLabel("Имя:")
         name_lbl.setFixedWidth(40)
@@ -104,7 +102,7 @@ class NewReport(QDialog):
         self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)  # todo: исправить что таблица странно выглядит
         # Убираем все автоматические настройки размера
         header = self.table.horizontalHeader()
 
@@ -213,17 +211,53 @@ class NewReport(QDialog):
             self.table.removeRow(row)
         self.status_label.setText(f"Удалено {len(rows)} строк(и).")
 
+
+    def filling_table_from_file(self, rows):
+        """
+        таблица заполняется из строк спаршенных с пдф/эксель
+        """
+        self.table.setRowCount(len(rows))
+        self.table.setColumnCount(len(COLUMNS))
+
+        # лёгкое форматирование чисел
+        def fmt(v) -> str:
+            if isinstance(v, float):
+                # 2 знака после запятой, запятая как десятичный
+                return f"{v:.3f}".replace(".", ",")
+            return "" if v is None else str(v)
+
+        numeric_cols_idx = set(range(1, len(COLUMNS)))
+
+        for r, row in enumerate(rows):
+            for c, value in enumerate(row):
+                item = QTableWidgetItem(fmt(value))
+
+                if c in numeric_cols_idx:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+                self.table.setItem(r, c, item)
+
+
     def choose_excel_file(self):  # todo: загрузка excel таблицы в self.table использовать parse_excel из data_utils можно импортить как from data_utils
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
         if path:
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
+            rows = parse_excel_ration(path)
+            self.filling_table_from_file(rows)
+
+
     def choose_pdf_file(self):  # todo: загрузка pdf таблицы в self.table, аналогично excel
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Выбрать PDF файл", "", "PDF files (*.pdf);;Все файлы (*)")
         if path:
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
+
+            rows = parse_pdf_for_tables(path)
+            self.filling_table_from_file(rows)
 
     def _collect_table_data(self):
         """Собираем данные из таблицы в список словарей"""
@@ -331,12 +365,7 @@ class NewReport(QDialog):
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            # Используем экземпляр QMessageBox для отображения результата
-            mb = QMessageBox(self)
-            mb.setIcon(QMessageBox.Icon.Information)
-            mb.setWindowTitle("Анализ завершён")
-            mb.setText(f"Новая запись сохранена")
-            mb.exec()
+
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
@@ -367,5 +396,7 @@ class NewReport(QDialog):
                 pass
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
+            self.close()
+
 
 

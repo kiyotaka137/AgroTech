@@ -1,16 +1,20 @@
+# main.py
 import sys
+from pathlib import Path
+
 from PyQt6 import QtCore
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLineEdit, QLabel, QListWidget,
-    QTabWidget, QTextEdit, QSplitter, QListWidgetItem
+    QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
+    QStackedWidget
 )
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QFileSystemWatcher
 
 from report_loader import ReportLoader
 from new_report_window import NewReport
-from report_list_item import ReportListItem  # отдельный виджет для элемента списка
+from report_list_item import ReportListItem
 from ration_table_widget import RationTableWidget
 
 
@@ -22,6 +26,14 @@ class MainWindow(QWidget):
         self.setGeometry(100, 100, 1400, 800)
         self.report_loader = ReportLoader()
         self.all_reports = []  # для фильтрации
+
+        # Папка с отчетами (меняем в соответствии с твоим текущим расположением)
+        self.reports_dir = Path("desktop/reports")
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
+
+        # Файловый watcher для автоматического обновления списка
+        self.fs_watcher = QFileSystemWatcher([str(self.reports_dir)])
+        self.fs_watcher.directoryChanged.connect(self.on_reports_dir_changed)
 
         # ===== Сайдбар =====
         sidebar_layout = QVBoxLayout()
@@ -74,10 +86,10 @@ class MainWindow(QWidget):
         # Поиск
         search_layout = QHBoxLayout()
         self.input_search = QLineEdit()
-        self.input_search.setPlaceholderText("Поиск отчета по имени")
+        self.input_search.setPlaceholderText("Поиск отчета по имени/отделу/периоду")
         self.input_search.setObjectName("searchInput")
         self.input_search.setFixedHeight(32)
-        self.input_search.textChanged.connect(self.filter_reports)  # фильтрация при вводе
+        self.input_search.textChanged.connect(self.filter_reports)
 
         search_layout.addWidget(self.input_search)
         search_layout.setContentsMargins(0, 6, 0, 0)
@@ -86,8 +98,17 @@ class MainWindow(QWidget):
         # Список
         self.history_list = QListWidget()
         self.history_list.setObjectName("historyList")
+        self.history_list.setStyleSheet("""
+        QListWidget#historyList {
+            background-color: #000;
+            border: none;
+        }
+        QListWidget#historyList::item:selected {
+            background-color: #2b2b2b;
+        }
+        """)
         self.history_list.itemClicked.connect(self.display_report)
-
+        
         # Компоновка
         history_layout.addLayout(header_layout)
         history_layout.addLayout(search_layout)
@@ -109,10 +130,19 @@ class MainWindow(QWidget):
 
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
+        self.tabs = tabs  # сохранить ссылку на TabWidget
 
         # --- Вкладка Рацион ---
-        self.tab_ration = RationTableWidget()
-        tabs.addTab(self.tab_ration, "Рацион")
+        # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
+        self.tab_ration_widget = RationTableWidget()
+        self.tab_ration_debug = QTextEdit()
+        self.tab_ration_debug.setReadOnly(True)
+
+        self.ration_stack = QStackedWidget()
+        self.ration_stack.addWidget(self.tab_ration_widget)  # 0
+        self.ration_stack.addWidget(self.tab_ration_debug)   # 1
+
+        tabs.addTab(self.ration_stack, "Рацион")
 
         # --- Вкладка Отчет ---
         self.tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
@@ -138,69 +168,210 @@ class MainWindow(QWidget):
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
 
+        # Первоначальная загрузка списка
+        self.refresh_reports_list()
+
     def toggle_history(self):
-        """Сворачивает историю отчетов"""
+        """Сворачивает/раскрывает панель истории"""
         if self.history_widget.isVisible():
             self.history_widget.hide()
         else:
             self.history_widget.show()
 
     def load_reports_to_list(self):
-        """Считывает все JSON файлы и выводит их в history_list"""
-        self.history_list.clear()
-        report_files = self.report_loader.list_reports()
-        self.all_reports = report_files  # сохраняем полный список для фильтрации
-
-        for report_file in report_files:
-            self._add_report_to_list(report_file)
-
+        """Обновляет список отчетов и показывает историю"""
+        self.refresh_reports_list()
         self.toggle_history()
 
-    def _add_report_to_list(self, report_file):
-        """Добавляет один отчет в QListWidget"""
-        info = self.report_loader.get_report_info(report_file)
-        modified_str = info["modified"].strftime("%Y-%m-%d %H:%M:%S")
+    def refresh_reports_list(self):
+        """Обновляет содержимое history_list по текущему состоянию папки reports (без смены видимости)."""
+        self.history_list.clear()
+        # Получаем список файлов от loader
+        report_files = self.report_loader.list_reports()
+        # Сохраняем полный список (строки/пути), пригодится для фильтрации
+        self.all_reports = list(report_files)
 
-        widget = ReportListItem(info["name"], modified_str)
+        # Сортируем по дате модификации (newest first), если есть такая информация
+        try:
+            def key_fn(p):
+                info = self.report_loader.get_report_info(p)
+                return info.get("modified", None) or Path(p).stat().st_mtime
+            report_files_sorted = sorted(report_files, key=key_fn, reverse=True)
+        except Exception:
+            report_files_sorted = list(report_files)
+
+        for report_file in report_files_sorted:
+            self._add_report_to_list(report_file)
+
+    def _add_report_to_list(self, report_file):
+        """
+        Добавляет один отчет в QListWidget.
+        Отображаемое имя: имя_отдел_период (подчёркивания вместо пробелов).
+        В UserRole сохраняется реальный путь/имя файла для надёжной загрузки.
+        """
+        # Попытаемся получить мета-инфо через loader
+        info = {}
+        try:
+            info = self.report_loader.get_report_info(report_file) or {}
+        except Exception:
+            info = {}
+
+        # Берём поля, если они есть
+        name = info.get("name") if isinstance(info, dict) else None
+        complex_ = info.get("complex") if isinstance(info, dict) else None
+        period = info.get("period") if isinstance(info, dict) else None
+
+        # Если полей нет — парсим имя файла (без расширения)
+        if not (name or complex_ or period):
+            stem = Path(report_file).stem
+            parts = stem.split("_")
+            if len(parts) >= 3:
+                name, complex_, period = parts[0], parts[1], "_".join(parts[2:])
+            elif len(parts) == 2:
+                name, complex_ = parts[0], parts[1]
+            else:
+                name = stem
+
+        def norm(s):
+            if s is None:
+                return None
+            s = str(s).strip()
+            if not s:
+                return None
+            return s.replace(" ", "_")
+
+        parts = [p for p in (norm(name), norm(complex_), norm(period)) if p]
+        display_name = "_".join(parts) if parts else Path(report_file).stem
+
+        # форматируем дату
+        modified = info.get("modified")
+        try:
+            if hasattr(modified, "strftime"):
+                modified_str = modified.strftime("%Y-%m-%d")
+            else:
+                # если modified это timestamp
+                modified_str = str(modified)
+        except Exception:
+            modified_str = ""
+
+        # Создаём виджет и item
+        widget = ReportListItem(display_name, modified_str)
         item = QListWidgetItem()
         item.setSizeHint(widget.sizeHint())
+
+        # Сохраняем реальный путь/имя файла в UserRole
+        item.setData(Qt.ItemDataRole.UserRole, str(report_file))
+
         self.history_list.addItem(item)
         self.history_list.setItemWidget(item, widget)
 
     def filter_reports(self, text):
-        """Фильтрует историю по подстроке поиска"""
+        """Фильтрует историю по подстроке (ищем по name, complex, period)."""
+        text = (text or "").strip().lower()
         self.history_list.clear()
+        if not text:
+            # пустой фильтр — показываем все
+            for report_file in self.all_reports:
+                self._add_report_to_list(report_file)
+            return
+
         for report_file in self.all_reports:
-            info = self.report_loader.get_report_info(report_file)
-            if text.lower() in info["name"].lower():
+            try:
+                info = self.report_loader.get_report_info(report_file) or {}
+            except Exception:
+                info = {}
+
+            name = str(info.get("name") or "")
+            complex_ = str(info.get("complex") or "")
+            period = str(info.get("period") or "")
+            combined = " ".join([name, complex_, period]).lower()
+
+            # если хотя бы одно совпадение — добавляем
+            if text in combined or text in Path(report_file).stem.lower():
                 self._add_report_to_list(report_file)
 
     def create_new_report(self):
         dialog = NewReport()
         dialog.exec()
+        # После закрытия диалога — обновим список (на случай, если watcher пропустил момент)
+        self.refresh_reports_list()
 
     def display_report(self, item):
-        widget = self.history_list.itemWidget(item)
-        if widget is None:
+        """
+        Загружает и отображает отчёт. Берём реальный путь файла из UserRole.
+        item — QListWidgetItem (передаётся сигналом itemClicked).
+        """
+        if item is None:
             return
 
-        lbl_name = widget.layout().itemAt(0).widget()
-        report_name = lbl_name.text()
+        report_file = item.data(Qt.ItemDataRole.UserRole)
+        if not report_file:
+            # fallback: пробуем получить текст из виджета
+            widget = self.history_list.itemWidget(item)
+            if widget is None:
+                return
+            try:
+                lbl_name = widget.layout().itemAt(0).widget()
+                report_name = lbl_name.text()
+                report_file = str(self.reports_dir / f"{report_name}.json")
+            except Exception:
+                return
 
-        filename = f"{report_name}.json"
+        # Попытка загрузить сначала по полному пути, затем по basename
+        report_data = None
         try:
-            report_data = self.report_loader.load_report(filename)
+            report_data = self.report_loader.load_report(report_file)
         except FileNotFoundError:
-            print(f"Файл {filename} не найден")
+            try:
+                report_data = self.report_loader.load_report(Path(report_file).name)
+            except FileNotFoundError:
+                print(f"Файл {report_file} не найден")
+                return
+        except Exception as e:
+            print(f"Ошибка при загрузке {report_file}: {e}")
             return
 
         # === Рацион ===
-        ration_array = report_data.get("ration", [])
-        self.tab_ration.load_from_json(ration_array)
+        ration_array = report_data.get("ration", None)
+
+        shown = False
+        # Попробуем загрузить через специализированный метод рациона
+        try:
+            if ration_array is not None and hasattr(self.tab_ration_widget, "load_from_json"):
+                self.tab_ration_widget.load_from_json(ration_array)
+                self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
+                shown = True
+        except Exception as e:
+            print(f"Ошибка при загрузке рациона через load_from_json: {e}")
+            shown = False
+
+        if not shown:
+            # fallback: показать сырой текст файла (или repr данных)
+            raw = None
+            try:
+                # пытаемся открыть файл как текст
+                with open(report_file, "r", encoding="utf-8") as f:
+                    raw = f.read()
+            except Exception:
+                try:
+                    raw = str(report_data)
+                except Exception:
+                    raw = "Не удалось прочитать содержимое файла."
+
+            # отображаем в QTextEdit (страница 1)
+            self.tab_ration_debug.setPlainText(raw)
+            self.ration_stack.setCurrentIndex(1)
 
         # === Текстовый отчет ===
         report_text = report_data.get("report_text", "")
-        self.tab_report.setPlainText(report_text)
+        self.tab_report.setPlainText(report_text or "")
+
+    def on_reports_dir_changed(self, path):
+        """
+        Вызывается QFileSystemWatcher при изменении папки reports.
+        Обновляем список с небольшим debounce.
+        """
+        QtCore.QTimer.singleShot(100, self.refresh_reports_list)
 
 
 if __name__ == "__main__":

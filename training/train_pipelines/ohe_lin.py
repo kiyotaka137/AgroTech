@@ -33,10 +33,18 @@ def get_ohe_train_test_data(column_coef="% СВ"):  # todo: сделать вы�
     df = pd.DataFrame(data, columns=columns)
     return dfw
 
+
+def minimal_infer():
+    pass
+
+
 if __name__ == "__main__":
     dataset = get_ohe_train_test_data()
     loocv = True
     cv = True
+
+    minimal_infer()
+
 
     if loocv:
         X = dataset.drop(["target"], axis=1).to_numpy()

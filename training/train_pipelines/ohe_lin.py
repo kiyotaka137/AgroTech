@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut
 
@@ -31,7 +31,7 @@ def get_ohe_train_test_data(column_coef="% СВ"):  # todo: сделать вы�
 
     columns = uniq_ration + ["target"]
     df = pd.DataFrame(data, columns=columns)
-    return df
+    return dfw
 
 if __name__ == "__main__":
     dataset = get_ohe_train_test_data()
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     cv = True
 
     if loocv:
-        X = dataset.drop("target", axis=1).to_numpy()
+        X = dataset.drop(["target"], axis=1).to_numpy()
         y = dataset["target"].to_numpy()
 
         model = Ridge(alpha=0.5)
@@ -64,21 +64,31 @@ if __name__ == "__main__":
         print(f"LOOCV RMSE (по всем объектам): {rmse:.4f}")
         print(f"LOOCV R²   (по всем объектам): {r2:.4f}")
 
-        final_model = Ridge(alpha=0.5)
+        final_model = Lasso(alpha=0.5)
         final_model.fit(X, y)
+
+        print(uniq_ration)
+        print(final_model.coef_)
+
+        for p, t in zip(y_pred, y_true):
+            print(round(p, 2), t)
+        print(f"RMSE: {rmse}, R2: {r2}")
+
 
     elif cv:
         X = dataset.drop("target", axis=1)
         y = dataset["target"]
 
         model = Ridge(alpha=0.5)
+        folds = 99
 
         rmse_scores = np.sqrt(-cross_val_score(
-            model, X, y, cv=5, scoring="neg_mean_squared_error"
+            model, X, y, cv=folds, scoring="neg_mean_squared_error"
         ))
+        print(rmse_scores)
         print(f"CV RMSE: {rmse_scores.mean():.4f}")
 
-        r2_scores = cross_val_score(model, X, y, cv=5, scoring="r2")
+        r2_scores = cross_val_score(model, X, y, cv=folds, scoring="r2")
         print(f"CV R2  : {r2_scores.mean():.4f}")
 
         model.fit(X, y)
@@ -97,3 +107,5 @@ if __name__ == "__main__":
             print(round(p, 2), t)
         print(f"RMSE: {rmse}, R2: {r2}")
 
+# LOOCV RMSE (по всем объектам): 0.4131
+# LOOCV R²   (по всем объектам): 0.3987

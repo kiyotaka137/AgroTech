@@ -62,18 +62,60 @@ QListWidget#historyList {
 }
 
 QListWidget#historyList::item {
-    background: #ffffff !important;
+    background-color: #ffffff !important;
     height: 36px;
     padding-left: 10px;
 }
 
 QListWidget#historyList::item:selected {
-    background: #dce9ff !important;
+    background-color: #dce9ff !important;
     color: #000 !important;
 }
 
 QListWidget#historyList::item:hover {
-    background: #f2f2f2 !important;
+    background-color: #f2f2f2 !important;
+}
+
+/* === FIX: черная область под последним элементом + видимый скроллбар === */
+QAbstractScrollArea {
+    background-color: #ffffff !important;
+}
+
+QListWidget, QListView, QWidget#historyWidget {
+    background-color: #ffffff !important;
+    background-clip: border;
+}
+
+QListWidget::viewport, QListView::viewport {
+    background-color: #ffffff !important;
+}
+
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: #f5f5f5 !important;
+    border: none;
+    border-radius: 4px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #a6a6a6 !important;
+    /*border-radius: 6px;*/
+    min-height: 20px;
+}
+
+QScrollBar::handle:hover {
+    background: #808080 !important;
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    background: none;
+    border: none;
+    height: 0;
+    width: 0;
+}
+
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: #f5f5f5 !important;
 }
 
 /* === History container === */
@@ -103,7 +145,6 @@ ReportListItem:hover {
 ReportListItem QLabel {
     background-color: transparent; /* чтобы наследовать фон родителя */
 }
-
 
 /* === Tabs === */
 QTabWidget {

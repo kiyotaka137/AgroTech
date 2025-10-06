@@ -98,15 +98,6 @@ class MainWindow(QWidget):
         # Список
         self.history_list = QListWidget()
         self.history_list.setObjectName("historyList")
-        self.history_list.setStyleSheet("""
-        QListWidget#historyList {
-            background-color: #000;
-            border: none;
-        }
-        QListWidget#historyList::item:selected {
-            background-color: #2b2b2b;
-        }
-        """)
         self.history_list.itemClicked.connect(self.display_report)
         
         # Компоновка

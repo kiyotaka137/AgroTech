@@ -467,6 +467,67 @@ class NewReport(QDialog):
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
             self.close()
+    # === JSON API ===
+    def load_from_json(self, ration_data,type_of_table):
+        """Заполняет таблицу из массива JSON"""
+        '''
+        if type_of_table=="left":
+            self.left_table.setRowCount(0)
+            for row_data in ration_data:
+                self.add_row_for_left_table()
+                row = self.left_table.rowCount() - 1
+                for c in range(2):
+                    value = row_data[c] #if c < len(row_data) else ""
+                    item = self.left_table.item(row, c)
+                    if item:
+                        item.setText(str(value))
+            self.status_label.setText(f"Загружено {len(ration_data)} строк")
+            # Пересчитываем размеры после загрузки данных
+            QTimer.singleShot(0, self.setup_columns_ratio)
+        '''
+        if type_of_table == "left":
+            self.left_table.setRowCount(0)  # Очищаем таблицу
+    
+            for row_data in ration_data:
+                row_position = self.left_table.rowCount()
+                self.left_table.insertRow(row_position)  # Добавляем новую строку
+                
+                # Заполняем ячейки, используя ключи словаря
+                # Первая колонка: "Ингредиенты"
+                ingredient_value = row_data.get("Ингредиенты", "")
+                ingredient_item = QTableWidgetItem(str(ingredient_value))
+                self.left_table.setItem(row_position, 0, ingredient_item)
+                
+                # Вторая колонка: "СВ %"
+                sv_value = row_data.get("СВ %", "")
+                sv_item = QTableWidgetItem(str(sv_value))
+                self.left_table.setItem(row_position, 1, sv_item)
+            
+            self.status_label.setText(f"Загружено {len(ration_data)} строк")
+            QTimer.singleShot(0, self.setup_columns_ratio)
+        if type_of_table=="right":
+            self.right_table.setRowCount(0)
+            for row_data in ration_data:
+                self.add_row_for_right_table()
+                row = self.right_table.rowCount() - 1
+                for c in range(2):
+                    value = row_data[c] if c < len(row_data) else ""
+                    item = self.right_table.item(row, c)
+                    if item:
+                        item.setText(str(value))
+            self.status_label.setText(f"Загружено {len(ration_data)} строк")
+            # Пересчитываем размеры после загрузки данных
+            QTimer.singleShot(0, self.setup_columns_ratio)
 
+    def to_json(self):
+        """Возвращает содержимое таблицы как список списков"""
+        data = []
+        for r in range(self.table.rowCount()):
+            row = []
+            for c in range(2):
+                item = self.table.item(r, c)
+                row.append(item.text() if item else "")
+            data.append(row)
+        return data
 
 

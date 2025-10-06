@@ -7,7 +7,8 @@ from io import StringIO
 
 #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 - kul
 #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 - sashakuly
-API_KEY = "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"
+#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 - попка
+API_KEY = "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"
 MODEL = "deepseek/deepseek-chat-v3.1:free"
 
 def extract_text_with_pypdf2(pdf_path):
@@ -31,14 +32,14 @@ def batch_query_deepseek(queries):
         response = query_deepseek(query)
 
         if response:
-            txt_path = f"parsed_data\\{key}_raw.txt"
+            txt_path = f"parsed_data\\step_analize\\{key}_raw.txt"
             with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(response)
 
             try:
                 df = pd.read_csv(StringIO(response), sep="|")
 
-                output_path = f"parsed_data\\{key}.csv"
+                output_path = f"parsed_data\\step_analize\\{key}.csv"
                 df.to_csv(output_path, sep="|", index=False, encoding="utf-8")
 
                 print(f"✓ Ответ сохранён: {output_path}")
@@ -94,9 +95,9 @@ def get_pdf_files_with_names(folder_path):
 
 
 if __name__ == "__main__":
-    FOLDER = "data/Для Хакатона/СН"
+    FOLDER = "data/Для Хакатона/"
 
-    main_prompt = """Это распаршенный текст pdf файла
+    ration_prompt = """Это распаршенный текст pdf файла
 Можешь достать оттуда только табличку Рацион и вывести ТОЛЬКО ее в формате .csv с разделителем |
 Без общих значений, если ячейка пустая, все равно добавь ее в таблицу csv
 Выведи без дополнительных слов и кавычек сразу табличку ввиде csv
@@ -104,18 +105,49 @@ if __name__ == "__main__":
 {text}
 """
 
+    analise_prompt = """Это распаршенный текст pdf файла
+Можешь достать оттуда только табличку "Сводный анализ: Лактирующая корова" возьми только строчки с такими нутриенами:
+ЧЭЛ 3x NRC (МДжоуль/кг)
+СП (%)
+Крахмал (%)
+RD Крахмал 3xУровень 1 (%)
+Сахар (ВРУ) (%)
+НСУ (%)
+НВУ (%)
+aNDFom (%)
+CHO B3 pdNDF (%)
+Растворимая клетчатка (%)
+aNDFom фуража (%)
+peNDF (%)
+CHO B3 медленная фракция (%)
+CHO C uNDF (%)
+СЖ (%)
+ОЖК (%)
+K (%)
+
+Если какой то из этих строчек нет, то добавь пустую строчку с пустыми ячейками
+Если какая то ячейка пустая то оставь ее пустой
+Выведи ТОЛЬКО таблицу в формате .csv с разделителем |
+Выведи без дополнительных слов и кавычек сразу табличку ввиде csv
+Текст:
+{text}
+    """
+
     queries = dict()
-    for i, (pdf, pdf_name) in enumerate(get_pdf_files_with_names(FOLDER)):
-        base_name = os.path.splitext(pdf_name)[0]
-        csv_path = os.path.join("parsed_data", f"{base_name}.csv")
 
-        if os.path.exists(csv_path):
-            print(f"Пропущено (уже обработано): {pdf_name}")
-            continue
+    for name in os.listdir(FOLDER):
+        full_path = os.path.join(FOLDER, name)
+        if os.path.isdir(full_path):
+            print(full_path)
+            for i, (pdf, pdf_name) in enumerate(get_pdf_files_with_names(full_path)):
+                base_name = os.path.splitext(pdf_name)[0]
+                csv_path = os.path.join("parsed_data/step_analize", f"{base_name}.csv")
 
-        text_pdf = extract_text_with_pypdf2(pdf)
-        queries[base_name] = main_prompt.format(text=text_pdf)
+                if os.path.exists(csv_path):
+                    print(f"Пропущено (уже обработано): {pdf_name}")
+                    continue
+
+                text_pdf = extract_text_with_pypdf2(pdf)
+                queries[base_name] = analise_prompt.format(text=text_pdf)
 
     batch_query_deepseek(queries)
-
-#print(len([f for f in os.listdir("parsed_data") if os.path.isfile(os.path.join("parsed_data", f)) and f.endswith(".csv")]))

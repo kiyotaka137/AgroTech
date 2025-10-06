@@ -1,1 +1,1 @@
-from .fix_data import name_mapping, uniq_ration
+from .fix_data import name_mapping, uniq_ration, uniq_step, change_mapping, uniq_changed_ration

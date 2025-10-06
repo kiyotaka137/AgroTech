@@ -4,11 +4,12 @@ from PyQt6.QtWidgets import (
     QPushButton, QComboBox, QLabel, QMessageBox
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer
 from datetime import date
+from PyQt6.QtWidgets import QHeaderView
 
 COLUMNS = [
-    "Дата", "ID коровы", "Ингредиенты", "СВ (%)", "%ГП",
-    "кгСВ", "кг%ГП%", "СВ ₽/Тонна"
+    "Ингредиенты", "СВ %", "ГП кг" ,"%ГП","%СВ"
 ]
 
 INGREDIENT_TYPES = [
@@ -35,20 +36,28 @@ class RationTableWidget(QWidget):
         self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        
+        # Убираем все автоматические настройки размера
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        
+        # Устанавливаем ручное управление размерами
+        for i in range(self.table.columnCount()):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
         main_layout.addWidget(self.table)
 
         # === Нижняя панель: кнопки + статус ===
         bottom_layout = QHBoxLayout()
-        bottom_layout.setContentsMargins(0, 0, 0, 0)  # панель без внутренних отступов
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(10)
 
         # Левая колонка с кнопками и статусом
         left_col = QVBoxLayout()
-        left_col.setContentsMargins(0, 0, 0, 0)   # без лишнего сверху
-        left_col.setSpacing(2)                     # расстояние между кнопками и статусом
+        left_col.setContentsMargins(0, 0, 0, 0)
+        left_col.setSpacing(2)
 
         # Горизонтальный блок кнопок
         btns_layout = QHBoxLayout()
@@ -89,47 +98,44 @@ class RationTableWidget(QWidget):
         bottom_layout.addWidget(analyze_btn)
         bottom_layout.setContentsMargins(5, 5, 5, 5)  
         
-
         main_layout.addLayout(bottom_layout)
+        
+        # Отложенная настройка размеров столбцов
+        QTimer.singleShot(0, self.setup_columns_ratio)
+
+    def setup_columns_ratio(self):
+        """Настройка соотношения столбцов 4:1:1:1:1"""
+        if self.table.width() == 0:
+            QTimer.singleShot(10, self.setup_columns_ratio)
+            return
+            
+        total_width = self.table.width()
+        column_count = self.table.columnCount()
+        
+        first_col_width = int(total_width * 4 / 8)
+        other_col_width = int(total_width * 1 / 8)
+        
+        self.table.setColumnWidth(0, first_col_width)
+        for i in range(1, 5):
+            self.table.setColumnWidth(i, other_col_width)
 
     def _make_button(self, text, slot):
         b = QPushButton(text)
         b.clicked.connect(slot)
         return b
 
-    def _make_combobox(self, value=None):
-        cb = QComboBox()
-        cb.addItems(INGREDIENT_TYPES)
-        if value in INGREDIENT_TYPES:
-            cb.setCurrentIndex(INGREDIENT_TYPES.index(value))
-        return cb
 
-    # === Логика таблицы ===
     def add_row(self, default=False):
         row = self.table.rowCount()
         self.table.insertRow(row)
 
+        # Убеждаемся, что соотношение столбцов правильное
+        self.setup_columns_ratio()
+        
         for c, col_name in enumerate(COLUMNS):
-            if col_name == "Ингредиенты":
-                cb = self._make_combobox()
-                self.table.setCellWidget(row, c, cb)
-            else:
-                item = QTableWidgetItem("")
-                if col_name not in ("Дата", "ID коровы", "Ингредиенты"):
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.table.setItem(row, c, item)
-
-        if default:
-            today = date.today().isoformat()
-            self.table.item(row, 0).setText(today)
-            self.table.item(row, 1).setText("001")
-            cb = self.table.cellWidget(row, 2)
-            cb.setCurrentIndex(INGREDIENT_TYPES.index("Комбинация"))
-            self.table.item(row, 3).setText("88.0")
-            self.table.item(row, 4).setText("14.5")
-            self.table.item(row, 5).setText("6.8")
-            self.table.item(row, 6).setText("0.99")
-            self.table.item(row, 7).setText("20000")
+            item = QTableWidgetItem("")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, c, item)
 
         self.status_label.setText(f"Добавлена строка {row + 1}")
 
@@ -162,6 +168,8 @@ class RationTableWidget(QWidget):
                     if item:
                         item.setText(str(value))
         self.status_label.setText(f"Загружено {len(ration_data)} строк")
+        # Пересчитываем размеры после загрузки данных
+        QTimer.singleShot(0, self.setup_columns_ratio)
 
     def to_json(self):
         """Возвращает содержимое таблицы как список списков"""
@@ -182,3 +190,8 @@ class RationTableWidget(QWidget):
     def analyze_clicked(self):
         rows = self.table.rowCount()
         QMessageBox.information(self, "Анализ", f"Будет выполнен анализ для {rows} строк.")
+    
+    def resizeEvent(self, event):
+        """При изменении размера окна пересчитываем столбцы"""
+        super().resizeEvent(event)
+        QTimer.singleShot(10, self.setup_columns_ratio)

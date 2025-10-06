@@ -15,7 +15,7 @@ from PyQt6.QtCore import Qt, QFileSystemWatcher
 from report_loader import ReportLoader
 from new_report_window import NewReport
 from report_list_item import ReportListItem
-from ration_table_widget import RationTableWidget
+from new_report_window import NewReport
 
 
 class MainWindow(QWidget):
@@ -107,6 +107,7 @@ class MainWindow(QWidget):
             background-color: #2b2b2b;
         }
         """)
+        #привязка клика к зистори листу(отображение)
         self.history_list.itemClicked.connect(self.display_report)
         
         # Компоновка
@@ -134,7 +135,7 @@ class MainWindow(QWidget):
 
         # --- Вкладка Рацион ---
         # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
-        self.tab_ration_widget = RationTableWidget()
+        self.tab_ration_widget = NewReport()
         self.tab_ration_debug = QTextEdit()
         self.tab_ration_debug.setReadOnly(True)
 
@@ -302,6 +303,9 @@ class MainWindow(QWidget):
             return
 
         report_file = item.data(Qt.ItemDataRole.UserRole)
+        print(report_file)#путь находится правильно
+        #снизу в комменте какой то бред
+        '''
         if not report_file:
             # fallback: пробуем получить текст из виджета
             widget = self.history_list.itemWidget(item)
@@ -313,47 +317,38 @@ class MainWindow(QWidget):
                 report_file = str(self.reports_dir / f"{report_name}.json")
             except Exception:
                 return
-
-        # Попытка загрузить сначала по полному пути, затем по basename
-        report_data = None
-        try:
-            report_data = self.report_loader.load_report(report_file)
-        except FileNotFoundError:
-            try:
-                report_data = self.report_loader.load_report(Path(report_file).name)
-            except FileNotFoundError:
-                print(f"Файл {report_file} не найден")
-                return
-        except Exception as e:
-            print(f"Ошибка при загрузке {report_file}: {e}")
-            return
-
+        '''
+        # Попытка загрузить сначала по полному пути, затем по basename(зачем это надо)
+        report_data = self.report_loader.load_report(report_file)
+        print(report_data)
         # === Рацион ===
-        ration_array = report_data.get("ration", None)
-
+        ration_array = report_data.get("rows", None)
+        print("массив с рационом",ration_array) #работает
+        self.tab_ration_widget.load_from_json(ration_array,"left")
+        self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
+        '''
         shown = False
+
         # Попробуем загрузить через специализированный метод рациона
         try:
             if ration_array is not None and hasattr(self.tab_ration_widget, "load_from_json"):
-                self.tab_ration_widget.load_from_json(ration_array)
-                self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
+                
                 shown = True
         except Exception as e:
             print(f"Ошибка при загрузке рациона через load_from_json: {e}")
             shown = False
-
-        if not shown:
-            # fallback: показать сырой текст файла (или repr данных)
-            raw = None
+        '''
+        # fallback: показать сырой текст файла (или repr данных)
+        raw = None
+        try:
+            # пытаемся открыть файл как текст
+            with open(report_file, "r", encoding="utf-8") as f:
+                raw = f.read()
+        except Exception:
             try:
-                # пытаемся открыть файл как текст
-                with open(report_file, "r", encoding="utf-8") as f:
-                    raw = f.read()
+                raw = str(report_data)
             except Exception:
-                try:
-                    raw = str(report_data)
-                except Exception:
-                    raw = "Не удалось прочитать содержимое файла."
+                raw = "Не удалось прочитать содержимое файла."
 
             # отображаем в QTextEdit (страница 1)
             self.tab_ration_debug.setPlainText(raw)

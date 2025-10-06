@@ -11,6 +11,7 @@ from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut, KFold
 from training.train_pipelines.ohe_lin import get_ohe_train_test_data, get_ohe_step_data
 import joblib
+import shap
 
 
 def get_data():
@@ -29,7 +30,7 @@ def get_data():
         "CHO C uNDF (%)": dataset_all["CHO C uNDF (%)"].median()
     })
 
-    # print(dataset_all.info())
+    print(dataset_all.info())
 
     dataset, test = train_test_split(dataset_all, train_size=0.9)
     #print(f"size of train {len(dataset)}")
@@ -113,8 +114,18 @@ def main():
     print(f"RMSE (по тестовой выборке): {rmse_test:.4f}")
     print(f"R²   (по тестовой выборке): {r2_test:.4f}")
 
-    # Сохраняем модель
+    # === Сохраняем модель ===
     joblib.dump(ensemble, '../../models/classic_pipe/ensemble.pkl')
+
+
+    # === Смотрим что влияет ===
+
+    # Создаём explainer
+    explainer = shap.Explainer(ensemble.predict, X)
+    shap_values = explainer(X)
+
+    # Визуализация (требует matplotlib)
+    shap.summary_plot(shap_values, X, feature_names=dataset.drop("target", axis=1).columns)
 
 
 def gridsearch():

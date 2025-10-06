@@ -77,7 +77,9 @@ def minimal_infer():
 
 
 if __name__ == "__main__":
-    dataset = get_ohe_train_test_data()
+    dataset = get_ohe_step_data()
+    dataset = dataset.drop(["RD Крахмал 3xУровень 1 (%)", "НСУ (%)", "CHO B3 pdNDF (%)", "peNDF (%)", "CHO B3 медленная фракция (%)"], axis=1)
+    dataset.dropna(inplace=True)
     loocv = True
     cv = True
 
@@ -110,9 +112,9 @@ if __name__ == "__main__":
         print(f"LOOCV RMSE (по всем объектам): {rmse:.4f}")
         print(f"LOOCV R²   (по всем объектам): {r2:.4f}")
 
-        final_model = Lasso(alpha=0.5)
+        final_model = Ridge(alpha=0.5)
         final_model.fit(X, y)
-        jl.dump(final_model, "models/classic_pipe/lasso_model.pkl")
+        jl.dump(final_model, "models/classic_pipe/ridge_model.pkl")
 
         print(uniq_ration)
         print(final_model.coef_)

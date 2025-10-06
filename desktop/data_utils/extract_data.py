@@ -118,7 +118,83 @@ def parse_pdf_for_tables(pdf_path: str):
                         row.append(cleaned)
             ration_data.append(row)
 
-    return ration_data
+    step_table = parse_step_table(text)
+    return ration_data, step_table
+
+
+def parse_step_table(text: str) -> Optional[List[Dict[str, Optional[float]]]]:
+    """
+    Парсит из PDF раздел 'Сводный анализ: Лактирующая корова'
+    и возвращает только два поля: name (нутриент) и dm (значение по СВ).
+
+    Формат результата: [{"name": str, "dm": float|None}, ...]
+    """
+    # --- helpers ---
+
+    def to_float(s: str) -> Optional[float]:
+        if not s:
+            return None
+        s = re.sub(r"\s+", "", s).replace(",", ".")
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    if not text:
+        return None
+
+    # --- isolate block ---
+    start_pat = r"Сводный анализ:\s*Лактирующая корова"
+    end_pat = r"(Экономический отчет|Единица\s+Всего\s+Единица\s+Закуплено|$)"
+
+    sm = re.search(start_pat, text, flags=re.IGNORECASE)
+    if not sm:
+        return None
+    em = re.search(end_pat, text[sm.end():], flags=re.IGNORECASE)
+    block = text[sm.end(): sm.end() + em.start()] if em else text[sm.end():]
+
+    lines = [ln.strip() for ln in block.splitlines()]
+    # убрать пустые и заголовки
+    lines = [
+        ln for ln in lines
+        if ln
+        and not re.match(r"^Нутриент\s+Единица", ln, re.IGNORECASE)
+        and not re.match(r"^(Единица|Итого|Всего)\b", ln, re.IGNORECASE)
+    ]
+
+    # Паттерны:
+    # 5 колонок: name | unit1 | dm | content | unit2  (берём name и dm)
+    pat5 = re.compile(
+        r"^(?P<name>.+?)\s+\S+\s+(?P<dm>[\d\s,]+)\s+[\d\s,]+\s+\S+\s*$"
+    )
+    # 3 колонки: name | unit1 | dm (берём name и dm)
+    pat3 = re.compile(
+        r"^(?P<name>.+?)\s+\S+\s+(?P<dm>[\d\s,]+)\s*$"
+    )
+
+    out: List[Dict[str, Optional[float]]] = []
+
+    for raw in lines:
+        m = pat5.match(raw)
+        if not m:
+            m = pat3.match(raw)
+
+        if m:
+            name = re.sub(r"\s+", " ", m.group("name")).strip(" :")
+            dm = to_float(m.group("dm"))
+            out.append({"name": name, "dm": dm})
+            continue
+
+        # Фоллбек на случай OCR-искажений: искать первое число как dm
+        parts = raw.split()
+        # индекс первого «числового» токена
+        num_idx = next((i for i, t in enumerate(parts) if re.fullmatch(r"[\d\s,]+", t)), None)
+        if num_idx is not None and num_idx >= 1:
+            name = " ".join(parts[:num_idx-1]).strip(" :") or parts[0]
+            dm = to_float(parts[num_idx])
+            out.append((name, dm))
+
+    return out
 
 
 def extract_text_with_pypdf2(pdf_path):
@@ -141,6 +217,7 @@ def extract_text_with_pypdf2(pdf_path):
 
 if __name__ == "__main__":
     #print(parse_excel_ration("test_data/Гилево Д1 25.07.25_АФМ.xlsx"))
-    pdf_path = "test_data/Д0 Высокое 25.02.25_ЭНАЛБ.pdf"
+    pdf_path = "test_data/Д1 ЖК Пеневичи 20.06.2025.pdf"
     ration_table = parse_pdf_for_tables(pdf_path)
-    print(ration_table)
+    step = parse_step_table(pdf_path)
+    print(step)

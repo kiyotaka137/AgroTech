@@ -1,0 +1,11 @@
+{
+  "method": "global-linear + MAD",
+  "alpha": 0.01,
+  "k": 3.0,
+  "column_coef": "% СВ",
+  "target_col": "target",
+  "n_total": 99,
+  "n_dropped": 11,
+  "n_kept": 88,
+  "only_features": null
+}

@@ -256,8 +256,8 @@ class NewReport(QDialog):
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
-            rows = parse_pdf_for_tables(path)
-            self.filling_table_from_file(rows)
+            ration_rows, step_rows = parse_pdf_for_tables(path)
+            self.filling_table_from_file(ration_rows)
 
     def _collect_table_data(self):
         """Собираем данные из таблицы в список словарей"""

@@ -9,17 +9,14 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QLineEdit, QLabel, QAbstractItemView, QComboBox, QFileDialog,
-    QHeaderView, QSizePolicy, QProgressBar
+    QHeaderView, QSizePolicy, QProgressBar,QSplitter,
 )
 from PyQt6.QtGui import QFont, QMovie
 from PyQt6.QtCore import (Qt, QTimer, QSize)
 
-# --- Настройки столбцов ---
-COLUMNS = [
-    "Ингредиенты", "СВ %", "ГП кг", "%ГП", "%СВ"
-]
-
-
+from data_utils import  parse_excel_ration, parse_pdf_for_tables
+COLUMNSLEFT = ["Ингридиенты","%СВ"]
+COLUMNSRIGHT=["Нутриент","СВ"]
 class NewReport(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,7 +43,8 @@ class NewReport(QDialog):
         self._build_statusbar()
 
         # стартовая строка-пример
-        self.add_row(default=True)
+        self.add_row_for_right_table()
+        self.add_row_for_left_table()
 
         QTimer.singleShot(100, self.setup_columns_ratio)
 
@@ -62,6 +60,7 @@ class NewReport(QDialog):
         self.setLayout(main_layout)
 
         # Поля ввода
+        # Поля ввода
         fields_layout = QHBoxLayout()
         name_lbl = QLabel("Имя:")
         name_lbl.setFixedWidth(40)
@@ -73,7 +72,7 @@ class NewReport(QDialog):
         self.complex_edit = QLineEdit(placeholderText="Введите комплекс")
         self.complex_edit.setFixedWidth(220)
 
-        period_lbl = QLabel("Период:")
+        period_lbl = QLabel("Дата:")
         period_lbl.setFixedWidth(60)
         self.period_edit = QLineEdit(placeholderText="например: 2025-01")
         self.period_edit.setFixedWidth(160)
@@ -99,37 +98,102 @@ class NewReport(QDialog):
         files_layout.addStretch()
         main_layout.addLayout(files_layout)
 
-        # Таблица
-        self.table = QTableWidget(0, len(COLUMNS))
-        self.table.setHorizontalHeaderLabels(COLUMNS)
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        #контейнеры чтобб разделять на левую и правую часть
+        left_container = QWidget()
+        left_layout = QVBoxLayout(left_container)
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        #таблица сводный анализ(правая)
+        self.right_table = QTableWidget(0,2)
+        self.right_table.setHorizontalHeaderLabels(COLUMNSRIGHT)
+        self.right_table.setAlternatingRowColors(True)
+        self.right_table.verticalHeader().setVisible(False)
+        self.right_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.right_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # Таблица ингридиенты( левая)
+        self.left_table = QTableWidget(0, 2)
+        self.left_table.setHorizontalHeaderLabels(COLUMNSLEFT)
+        self.left_table.setAlternatingRowColors(True)
+        self.left_table.verticalHeader().setVisible(False)
+        self.left_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)  # todo: исправить что таблица странно выглядит
+        self.left_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Убираем все автоматические настройки размера
-        header = self.table.horizontalHeader()
 
         # Fixed режим запрещает пользователю менять размеры, но позволяет программе
-        for i in range(self.table.columnCount()):
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+        for i in range(2):
+            self.left_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+            self.right_table.horizontalHeader().setSectionResizeMode(i,QHeaderView.ResizeMode.Fixed)
 
-        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-
+        #выделяется вся строчка при нажати и текст в ячейке выравнивается по центру
+        self.left_table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.left_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.right_table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.right_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         # Стили для таблицы
-        self.table.setShowGrid(True)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: lightgray;
-            }
-            QHeaderView::section {
-                border: 1px solid lightgray;
-                padding: 4px;
-                background-color: #f0f0f0;
-            }
-        """)
+        self.left_table.setShowGrid(True)
+        self.left_table.setStyleSheet("""
+    QTableWidget {
+        gridline-color: lightgray;
+        border: none; 
+        outline: none;
+    }
+    QTableWidget::item {
+        border-bottom: 1px solid lightgray;
+    }
+    QHeaderView::section {
+        border: 1px solid lightgray;
+        padding: 4px;
+        background-color: #f0f0f0;
+    }
+    QTableWidget::item:selected {
+        background-color: #e0e0e0; 
+    }
+""")
+        self.right_table.setShowGrid(True)
+        self.right_table.setStyleSheet("""
+    QTableWidget {
+        gridline-color: lightgray;
+        border: none; 
+        outline: none;
+    }
+    QTableWidget::item {
+        border-bottom: 1px solid lightgray;
+    }
+    QHeaderView::section {
+        border: 1px solid lightgray;
+        padding: 4px;
+        background-color: #f0f0f0;
+    }
+    QTableWidget::item:selected {
+        background-color: #e0e0e0; 
+    }
+""")
+        # добавить/удалить  для левой таблицы
+        left_buttons_layout = QHBoxLayout()
+        left_buttons_layout.addWidget(self._make_button("Добавить строку", self.add_row_for_left_table))
+        left_buttons_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected_for_left_table))
+        left_buttons_layout.addStretch()
 
-        main_layout.addWidget(self.table, 1)
+        #добавить/удалить для правой таблицы
+        right_buttons_layout = QHBoxLayout()
+        right_buttons_layout.addWidget(self._make_button("Добавить строку", self.add_row_for_right_table))
+        right_buttons_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected_for_right_table))
+        right_buttons_layout.addStretch()
 
+        #сплитер для разделения таблиц
+        splitter=QSplitter(Qt.Orientation.Horizontal)
+        left_layout.addWidget(self.left_table)
+        right_layout.addWidget(self.right_table)
+        right_layout.addLayout(right_buttons_layout)
+        left_layout.addLayout(left_buttons_layout)
+        splitter.addWidget(left_container)
+        splitter.addWidget(right_container)
+
+        # установка соотношения таблиц
+        splitter.setStretchFactor(0, 6)
+        splitter.setStretchFactor(1, 6)
+        main_layout.addWidget(splitter,1)
         QTimer.singleShot(0, self.setup_columns_ratio)
 
         # Кнопка "Анализировать"
@@ -143,12 +207,7 @@ class NewReport(QDialog):
         analyze_layout.addStretch()
         main_layout.addLayout(analyze_layout)
 
-        # Кнопки Добавить / Удалить
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addWidget(self._make_button("Добавить строку", self.add_row))
-        bottom_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected))
-        bottom_layout.addStretch()
-        main_layout.addLayout(bottom_layout)
+        
 
     def _make_button(self, text, slot):
         b = QPushButton(text)
@@ -162,77 +221,122 @@ class NewReport(QDialog):
 
     def setup_columns_ratio(self):
         """Настройка соотношения столбцов 4:1:1:1:1"""
-        if self.table.width() == 0:
+        if self.left_table.width() == 0:
             QTimer.singleShot(10, self.setup_columns_ratio)
             return
 
-        total_width = self.table.width()
-        column_count = self.table.columnCount()
+        total_width = self.left_table.width()
 
-        # Защитимся от деления при неверном количестве колонок
-        if column_count < 5:
-            per = total_width // max(1, column_count)
-            for i in range(column_count):
-                self.table.setColumnWidth(i, per)
-            return
+        col_width = int(total_width * 1 / 2)
 
-        first_col_width = int(total_width * 4 / 8)
-        other_col_width = int(total_width * 1 / 8)
+        self.left_table.setColumnWidth(0, col_width)
+        self.left_table.setColumnWidth(1,col_width)
+        self.right_table.setColumnWidth(0,col_width)
+        self.right_table.setColumnWidth(1,col_width)
 
-        self.table.setColumnWidth(0, first_col_width)
-        for i in range(1, 5):
-            if i < column_count:
-                self.table.setColumnWidth(i, other_col_width)
-
-    def add_row(self, default=False):
-        row = self.table.rowCount()
-        self.table.insertRow(row)
+    def add_row_for_left_table(self):
+        table = self.left_table
+        columns = COLUMNSLEFT
+        
+        row = table.rowCount()
+        table.insertRow(row)
 
         # Убеждаемся, что соотношение столбцов правильное
         self.setup_columns_ratio()
 
-        for c, col_name in enumerate(COLUMNS):
+        for c, col_name in enumerate(columns):
             item = QTableWidgetItem("")
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, c, item)
+            self.left_table.setItem(row, c, item)
+    def add_row_for_right_table(self):
+        table = self.right_table
+        columns=COLUMNSRIGHT
+        row = table.rowCount()
+        table.insertRow(row)
 
-        self.status_label.setText(f"Добавлена строка {row + 1}")
+        # Убеждаемся, что соотношение столбцов правильное
+        self.setup_columns_ratio()
 
-    def remove_selected(self):
-        selected = self.table.selectionModel().selectedRows()
+        for c, col_name in enumerate(columns):
+            item = QTableWidgetItem("")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.left_table.setItem(row, c, item)
+
+    def remove_selected_for_left_table(self):
+        table = self.left_table
+        selected = table.selectionModel().selectedRows()
         if not selected:
-            # Используем экземпляр QMessageBox вместо статического вызова
-            mb = QMessageBox(self)
-            mb.setIcon(QMessageBox.Icon.Information)
-            mb.setWindowTitle("Удаление")
-            mb.setText("Нет выделенных строк.")
-            mb.exec()
             return
         rows = sorted([idx.row() for idx in selected], reverse=True)
         for row in rows:
-            self.table.removeRow(row)
-        self.status_label.setText(f"Удалено {len(rows)} строк(и).")
+            table.removeRow(row)
 
-    def choose_excel_file(self):  # todo: загрузка excel таблицы в self.table использовать parse_excel из data_utils можно импортить как from data_utils
+    def remove_selected_for_right_table(self):
+        table=self.right_table
+            
+        selected = table.selectionModel().selectedRows()
+        if not selected:
+            return
+        rows = sorted([idx.row() for idx in selected], reverse=True)
+        for row in rows:
+            table.removeRow(row)
+
+
+    def filling_left_table_from_file(self, rows):
+        """
+        таблица заполняется из строк спаршенных с пдф/эксель
+        """
+        self.left_table.setRowCount(len(rows))
+        self.left_table.setColumnCount(len(COLUMNSLEFT))
+
+        # лёгкое форматирование чисел
+        def fmt(v) -> str:
+            if isinstance(v, float):
+                # 2 знака после запятой, запятая как десятичный
+                return f"{v:.3f}".replace(".", ",")
+            return "" if v is None else str(v)
+
+        numeric_cols_idx = set(range(1, len(COLUMNSLEFT)))
+
+        for r, row in enumerate(rows):
+            for c, value in enumerate(row):
+                item = QTableWidgetItem(fmt(value))
+
+                if c in numeric_cols_idx:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+                self.left_table.setItem(r, c, item)
+
+
+    def choose_excel_file(self):  # todo: загрузка excel таблицы в self.left_table использовать parse_excel из data_utils можно импортить как from data_utils
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
         if path:
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
-    def choose_pdf_file(self):  # todo: загрузка pdf таблицы в self.table, аналогично excel
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
+            rows = parse_excel_ration(path)
+            self.filling_left_table_from_file(rows)
+
+
+    def choose_pdf_file(self):  # todo: загрузка pdf таблицы в self.left_table, аналогично excel
+        path, _ = QFileDialog.getOpenFileName(self, "Выбрать PDF файл", "", "PDF files (*.pdf);;Все файлы (*)")
         if path:
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
-    def _collect_table_data(self):
+            rows = parse_pdf_for_tables(path)
+            self.filling_left_table_from_file(rows)
+
+    def _collect_left_table_data(self):
         """Собираем данные из таблицы в список словарей"""
         rows = []
-        for r in range(self.table.rowCount()):
+        for r in range(self.left_table.rowCount()):
             row_data = {}
             empty_row = True
-            for c, col_name in enumerate(COLUMNS):
-                item = self.table.item(r, c)
+            for c, col_name in enumerate(COLUMNSLEFT):
+                item = self.left_table.item(r, c)
                 text = item.text() if item is not None else ""
                 if text.strip():
                     empty_row = False
@@ -314,7 +418,7 @@ class NewReport(QDialog):
                     "excel": self.excel_path or None,
                     "created_at": datetime.now().isoformat()
                 },
-                "rows": self._collect_table_data()
+                "rows": self._collect_left_table_data()
             }
 
             # Папка для сохранения
@@ -331,12 +435,7 @@ class NewReport(QDialog):
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            # Используем экземпляр QMessageBox для отображения результата
-            mb = QMessageBox(self)
-            mb.setIcon(QMessageBox.Icon.Information)
-            mb.setWindowTitle("Анализ завершён")
-            mb.setText(f"Новая запись сохранена")
-            mb.exec()
+
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
@@ -367,5 +466,7 @@ class NewReport(QDialog):
                 pass
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
+            self.close()
+
 
 

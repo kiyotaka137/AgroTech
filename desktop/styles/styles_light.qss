@@ -1,0 +1,250 @@
+/* === Force light theme globally === */
+* {
+    background-color: #ffffff !important;
+    color: #222222 !important;
+    selection-background-color: #dce9ff !important;
+    selection-color: #000000 !important;
+}
+
+/* === Sidebar === */
+QWidget#sidebar {
+    background-color: #f5f5f5 !important;
+    border-right: 1px solid #e6e6e6;
+}
+
+/* === Buttons (иконки) === */
+QPushButton {
+    background: transparent !important;
+    border: none !important;
+    color: #444 !important;
+    padding: 4px;
+}
+
+QPushButton:hover {
+    background-color: #eaeaea !important;
+}
+
+QPushButton:pressed {
+    background-color: #dcdcdc !important;
+}
+
+/* === Header Label === */
+QLabel#headerLabel {
+    color: #222 !important;
+    font-weight: 800;
+    font-size: 18px;
+    padding-left: 4px;
+}
+
+/* === Search Input === */
+QLineEdit#searchInput {
+    background: #ffffff !important;
+    border: 1px solid #dcdcdc !important;
+    border-radius: 0px;
+    color: #333 !important;
+    padding: 5px 8px;
+    font-size: 13px;
+}
+
+QLineEdit#searchInput:focus {
+    border: 1px solid #66aaff !important;
+    background: #ffffff !important;
+}
+
+/* === History list === */
+QListWidget#historyList {
+    background: #ffffff !important;
+    border: 1px solid #e6e6e6 !important;
+    color: #333 !important;
+    font-size: 16px;
+    font-weight: 500;
+    outline: 0;
+}
+
+QListWidget#historyList::item {
+    background-color: #ffffff !important;
+    height: 36px;
+    padding-left: 10px;
+}
+
+QListWidget#historyList::item:selected {
+    background-color: #dce9ff !important;
+    color: #000 !important;
+}
+
+QListWidget#historyList::item:hover {
+    background-color: #f2f2f2 !important;
+}
+
+/* === FIX: черная область под последним элементом + видимый скроллбар === */
+QAbstractScrollArea {
+    background-color: #ffffff !important;
+}
+
+QListWidget, QListView, QWidget#historyWidget {
+    background-color: #ffffff !important;
+    background-clip: border;
+}
+
+QListWidget::viewport, QListView::viewport {
+    background-color: #ffffff !important;
+}
+
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: #f5f5f5 !important;
+    border: none;
+    border-radius: 4px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #a6a6a6 !important;
+    /*border-radius: 6px;*/
+    min-height: 20px;
+}
+
+QScrollBar::handle:hover {
+    background: #808080 !important;
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    background: none;
+    border: none;
+    height: 0;
+    width: 0;
+}
+
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: #f5f5f5 !important;
+}
+
+/* === History container === */
+QWidget#historyWidget {
+    background-color: #fafafa !important;
+    border-right: 1px solid #e6e6e6;
+}
+
+QLabel#headerLabel {
+    background-color: transparent; 
+    color: #222;
+    font-weight: 800;
+    font-size: 18px;
+    padding-left: 4px;
+}
+
+/* Список отчетов — кастомные виджеты */
+ReportListItem {
+    background-color: #ffffff;
+}
+
+ReportListItem:hover {
+    background-color: #dce9ff; /* фон при наведении */
+}
+
+/* Принудительно красим все QLabel внутри */
+ReportListItem QLabel {
+    background-color: transparent; /* чтобы наследовать фон родителя */
+}
+
+/* === Tabs === */
+QTabWidget {
+    border: none;
+    font-size: 16px;
+    background: #ffffff !important;
+}
+
+QTabWidget::pane {
+    border: none;
+    background: #ffffff !important;
+}
+
+QTabBar::tab {
+    padding: 8px 16px;
+    background: #f5f5f5 !important;
+    color: #555 !important;
+    border: none;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background: #ffffff !important;
+    color: #000 !important;
+    font-weight: 600;
+    border-bottom: 2px solid #66aaff !important;
+}
+
+QTabBar::tab:hover {
+    background: #eeeeee !important;
+}
+
+/* === Report area (QTextEdit) === */
+QTextEdit {
+    border: none;
+    padding: 10px;
+    background: #ffffff !important;
+    color: #222 !important;
+    font-size: 14px;
+}
+
+/* === Кнопки с рамкой === */
+QPushButton.borderButton {
+    background-color: #ffffff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+QPushButton.borderButton:hover {
+    background-color: #f0f0f0;
+}
+
+QPushButton.borderButton:pressed {
+    background-color: #e0e0e0;
+}
+
+/* === Primary кнопка (синяя) === */
+QPushButton[primary="true"] {
+    background-color: #0078d7;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+}
+
+QPushButton[primary="true"]:hover {
+    background-color: #005fa1;
+}
+
+QPushButton[primary="true"]:pressed {
+    background-color: #004c80;
+}
+
+/* === ComboBox, SpinBox, DateEdit, etc. === */
+QComboBox, QSpinBox, QDateEdit, QTimeEdit {
+    background: #ffffff !important;
+    color: #222 !important;
+    border: 1px solid #dcdcdc !important;
+    selection-background-color: #dce9ff !important;
+}
+
+/* === Table widgets === */
+QTableWidget, QTableView {
+    background: #ffffff !important;
+    color: #222 !important;
+    gridline-color: #e6e6e6 !important;
+}
+
+QHeaderView::section {
+    background: #f5f5f5 !important;
+    color: #222 !important;
+    border: 1px solid #e6e6e6 !important;
+}
+
+/* === Исправление чередующихся черных строк в таблице === */
+QTableWidget::item {
+    background-color: #ffffff !important;
+}
+
+QTableWidget::item:alternate {
+    background-color: #f9f9f9 !important;
+}

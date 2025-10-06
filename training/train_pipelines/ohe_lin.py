@@ -1,153 +1,159 @@
 import pandas as pd
 import numpy as np
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import Ridge
+import joblib as jl
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import (
-    train_test_split, cross_val_score, LeaveOneOut, GridSearchCV, KFold
-)
-
-from training import name_mapping, uniq_ration
-
-target_path = "../data/Для Хакатона/targets.csv"
-rations_path = "../parsed_data/{table}.csv"
-
-# сетка значений для alpha (логарифмическая шкала)
-ALPHA_GRID = np.logspace(-4, 3, 25)
-# список признаков к удалению
-DROP_FEATURES = ["сорго", "подсолнечник", "лен", "сено", "пшеница", "зерно"]
+from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut
 
 
-def build_model(alpha=0.5):
-    """Pipeline: StandardScaler -> Ridge(alpha)."""
-    return make_pipeline(
-        StandardScaler(),
-        Ridge(alpha=alpha)
-    )
+from training import name_mapping, change_mapping, uniq_ration, uniq_step, uniq_changed_ration
 
+target_path = "training/data/Для Хакатона/targets.csv"
+rations_path = "training/parsed_data/{table}.csv"
+step_path = "training/parsed_data/step_analize/{table}.csv"
 
-def get_ohe_train_test_data(column_coef="% СВ"):  # todo: сделать выбор таргетов множественным
+def get_ohe_train_test_data(mapping=name_mapping, uniq=uniq_ration, column_coef="% СВ", target_col="Лауриновая"):  # todo: сделать выбор таргетов множественным
     targets = pd.read_csv(target_path, sep=";")
-    uniq_dict = {elem: ind for ind, elem in enumerate(uniq_ration)}
+    uniq_dict = {elem: ind for ind, elem in enumerate(uniq)}
     data = []
 
     for table, elem in enumerate(targets["Рацион"].values):
-        row = [0] * len(uniq_ration) + [targets.loc[table, "Лауриновая"]]
+        row = [0] * len(uniq) + [targets.loc[table, target_col]]
 
         if elem[-1] == '.':
             elem = elem[:-1]
         ration = pd.read_csv(rations_path.format(table=elem.strip()), sep="|")
 
         for i, ingr in enumerate(ration["Ингредиенты"]):
-            clear_elem = name_mapping[ingr]
+            clear_elem = mapping[ingr]
             row[uniq_dict[clear_elem]] += float(ration.loc[i, column_coef].replace(",", "."))
 
         data.append(row)
 
-    columns = uniq_ration + ["target"]
+    columns = uniq + ["target"]
     df = pd.DataFrame(data, columns=columns)
     return df
 
 
+def get_ohe_step_data(mapping=change_mapping(), uniq=uniq_changed_ration, column_coef="% СВ", target_col="Лауриновая"):
+    targets = pd.read_csv(target_path, sep=";")
+    uniq_dict = {elem: ind for ind, elem in enumerate(uniq)}
+    uniq_step_dict = {elem: ind + len(uniq) for ind, elem in enumerate(uniq_step)}
+
+    data = []
+
+    for table, elem in enumerate(targets["Рацион"].values):
+        row = [0] * (len(uniq) + len(uniq_step))
+
+        if elem[-1] == '.':
+            elem = elem[:-1]
+        ration = pd.read_csv(rations_path.format(table=elem.strip()), sep="|")
+        step_data = pd.read_csv(step_path.format(table=elem.strip()), sep="|")
+
+        for i, ingr in enumerate(ration["Ингредиенты"]):
+            clear_elem = mapping[ingr]
+            row[uniq_dict[clear_elem]] += float(ration.loc[i, column_coef].replace(",", "."))
+
+        for i, elem in enumerate(step_data.iloc[:, 0].values):
+            val_elem = step_data.iloc[i, 1]
+
+            if not val_elem or (type(val_elem) == str and not val_elem.strip()):
+                val_elem = np.nan
+            elif type(val_elem) == str:
+                val_elem = float(val_elem.replace(",", "."))
+
+            row[uniq_step_dict[elem]] += val_elem
+
+        row += [targets.loc[table, target_col]]
+        data.append(row)
+
+    columns = uniq + uniq_step + ["target"]
+    df = pd.DataFrame(data, columns=columns)
+    return df
+
+
+def minimal_infer():
+    pass
+
+
 if __name__ == "__main__":
-    dataset = get_ohe_train_test_data()
+    dataset = get_ohe_step_data()
+    dataset = dataset.drop(["RD Крахмал 3xУровень 1 (%)", "НСУ (%)", "CHO B3 pdNDF (%)", "peNDF (%)", "CHO B3 медленная фракция (%)"], axis=1)
+    dataset.dropna(inplace=True)
     loocv = True
-    cv = True   # если оба True — выведем и LOO, и 5-fold CV
+    cv = True
 
-    # --- подготовка X, y и отбрасывание 6 колонок ---
-    X_df = dataset.drop(columns=[c for c in ["target"] + DROP_FEATURES if c in dataset.columns])
-    y_sr = dataset["target"]
-    X_all = X_df.astype(float).to_numpy()
-    y_all = y_sr.astype(float).to_numpy()
+    minimal_infer()
 
-    # ---------- если включён хотя бы один режим (LOOCV или CV), подберём alpha по R^2 один раз ----------
-    best_alpha = None
-    best_model_cv = None
-    grid = None
-    inner_cv = None
-    if loocv or cv:
-        pipe = build_model()  # StandardScaler -> Ridge(alpha=?)
-        param_grid = {"ridge__alpha": ALPHA_GRID}
-        inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
 
-        grid = GridSearchCV(
-            estimator=pipe,
-            param_grid=param_grid,
-            cv=inner_cv,
-            scoring="r2",      # подбор по R^2
-            n_jobs=-1,
-            refit=True
-        )
-        grid.fit(X_all, y_all)
-        best_alpha = grid.best_params_["ridge__alpha"]
-        best_model_cv = grid.best_estimator_
-
-    # ----------------------------- LOOCV (если loocv=True) -----------------------------
     if loocv:
-        model_loo = build_model(alpha=best_alpha)
+        X = dataset.drop(["target"], axis=1).to_numpy()
+        y = dataset["target"].to_numpy()
+
+        model = Ridge(alpha=0.5)
+        loo = LeaveOneOut()
 
         y_true, y_pred = [], []
-        loo = LeaveOneOut()
-        for tr, te in loo.split(X_all):
-            model_loo.fit(X_all[tr], y_all[tr])
-            y_pred.append(model_loo.predict(X_all[te])[0])
-            y_true.append(y_all[te][0])
 
-        y_true = np.array(y_true)
-        y_pred = np.array(y_pred)
+        for train_idx, test_idx in loo.split(X):
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
 
+            model.fit(X_train, y_train)
+            pred = model.predict(X_test)
+
+            y_true.append(y_test[0])
+            y_pred.append(pred[0])
+
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
         rmse = np.sqrt(mean_squared_error(y_true, y_pred))
         r2 = r2_score(y_true, y_pred)
 
-        print(f"LOOCV alpha: {best_alpha:.6g}")
-        print(f"LOOCV RMSE: {rmse:.4f}")
-        print(f"LOOCV R^2:  {r2:.4f}")
+        print(f"LOOCV RMSE (по всем объектам): {rmse:.4f}")
+        print(f"LOOCV R²   (по всем объектам): {r2:.4f}")
 
-        # финальная модель на всех данных (если нужно дальше использовать)
-        final_model_loo = build_model(alpha=best_alpha).fit(X_all, y_all)
+        final_model = Ridge(alpha=0.5)
+        final_model.fit(X, y)
+        jl.dump(final_model, "models/classic_pipe/ridge_model.pkl")
 
-    # ------------------------------ CV (если cv=True) ----------------------------------
-    if cv:
-        # считаем и R^2, и RMSE на тех же фолдах, что использовались в GridSearch
-        r2_scores = cross_val_score(
-            best_model_cv, X_all, y_all, cv=inner_cv, scoring="r2", n_jobs=-1
-        )
-        rmse_scores = -cross_val_score(
-            best_model_cv, X_all, y_all, cv=inner_cv, scoring="neg_root_mean_squared_error", n_jobs=-1
-        )
+        print(uniq_ration)
+        print(final_model.coef_)
 
-        print(f"CV(5-fold) alpha: {best_alpha:.6g}")
-        print(f"CV(5-fold) RMSE: {rmse_scores.mean():.4f}")
-        print(f"CV(5-fold) R^2:  {r2_scores.mean():.4f}")
+        for p, t in zip(y_pred, y_true):
+            print(round(p, 2), t)
+        print(f"RMSE: {rmse}, R2: {r2}")
 
-        final_model_cv = best_model_cv.fit(X_all, y_all)
+    elif cv:
+        X = dataset.drop("target", axis=1)
+        y = dataset["target"]
 
-    # ------------------------------ Holdout 90/10 (если оба выключены) ----------------------------------
-    if not (loocv or cv):
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_all, y_all, test_size=0.1, random_state=42
-        )
+        model = Ridge(alpha=0.5)
+        folds = 99
 
-        pipe = build_model()
-        param_grid = {"ridge__alpha": ALPHA_GRID}
+        rmse_scores = np.sqrt(-cross_val_score(
+            model, X, y, cv=folds, scoring="neg_mean_squared_error"
+        ))
+        print(rmse_scores)
+        print(f"CV RMSE: {rmse_scores.mean():.4f}")
 
-        grid = GridSearchCV(
-            estimator=pipe,
-            param_grid=param_grid,
-            cv=5,
-            scoring="r2",   # подбор по R^2
-            n_jobs=-1,
-            refit=True
-        ).fit(X_train, y_train)
+        r2_scores = cross_val_score(model, X, y, cv=folds, scoring="r2")
+        print(f"CV R2  : {r2_scores.mean():.4f}")
 
-        best_alpha = grid.best_params_["ridge__alpha"]
-        best_model = grid.best_estimator_
+        model.fit(X, y)
 
-        pred = best_model.predict(X_test)
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(dataset.drop("target", axis=1), dataset["target"], test_size=0.1, random_state=42)
+
+        model = Ridge(alpha=0.5)
+        model.fit(X_train, y_train)
+
+        pred = model.predict(X_test)
         rmse = np.sqrt(mean_squared_error(y_test, pred))
         r2 = r2_score(y_test, pred)
 
-        print(f"Holdout alpha:     {best_alpha:.6g}")
-        print(f"Holdout Test RMSE: {rmse:.4f}")
-        print(f"Holdout Test R^2:  {r2:.4f}")
+        for p, t in zip(pred, y_test):
+            print(round(p, 2), t)
+        print(f"RMSE: {rmse}, R2: {r2}")
+
+# LOOCV RMSE (по всем объектам): 0.4131
+# LOOCV R²   (по всем объектам): 0.3987

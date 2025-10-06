@@ -107,7 +107,6 @@ class MainWindow(QWidget):
             background-color: #2b2b2b;
         }
         """)
-        #привязка клика к зистори листу(отображение)
         self.history_list.itemClicked.connect(self.display_report)
         
         # Компоновка

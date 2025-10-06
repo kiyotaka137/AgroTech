@@ -51,5 +51,5 @@ def predict_from_file(json_report, model_path, acids_list):
 
 if __name__ == '__main__':
     print(predict_from_file(json_report="../reports/report_2025-10-05_1759679897.json",
-                            model_path="../../models/classic_pipe",
+                            model_path="../../models/classic_pipe/acids",
                             acids_list=config.acids))

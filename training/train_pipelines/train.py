@@ -9,99 +9,73 @@ from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSearchCV
 from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut, KFold
-from ohe_lin import get_ohe_train_test_data
+from training.train_pipelines.ohe_lin import get_ohe_train_test_data, get_ohe_step_data
 
+def get_data():
+    dataset_all = get_ohe_step_data()
+    dataset_all = dataset_all.drop(["CHO B3 медленная фракция (%)",
+                                    "CHO B3 pdNDF (%)",
+                                    "НСУ (%)",
+                                    "RD Крахмал 3xУровень 1 (%)"],
+                                   axis=1)
+    dataset_all = dataset_all.fillna({
+        "aNDFom фуража (%)": dataset_all["aNDFom фуража (%)"].median(),
+        "СЖ (%)": dataset_all["СЖ (%)"].median(),
+        "Растворимая клетчатка (%)": dataset_all["Растворимая клетчатка (%)"].median(),
+        "peNDF (%)": dataset_all["peNDF (%)"].median(),
+        "ОЖК (%)": dataset_all["ОЖК (%)"].median(),
+        "CHO C uNDF (%)": dataset_all["CHO C uNDF (%)"].median()
+    })
 
-def main():
-    dataset_all = get_ohe_train_test_data()
+    # print(dataset_all.info())
+
     dataset, test = train_test_split(dataset_all, train_size=0.9)
     print(f"size of train {len(dataset)}")
     print(f"size of test {len(test)}")
 
+    return dataset, test
+
+def main():
+    # === Загрузка dataset и работа с None ===
+    dataset, test = get_data()
     X = dataset.drop("target", axis=1).to_numpy()
     y = dataset["target"].to_numpy()
 
-    # RandomForest
-    # params: {'rf__bootstrap': True, 'rf__max_depth': 5, 'rf__max_features': 'sqrt', 'rf__min_samples_leaf': 1,
-    #          'rf__min_samples_split': 5, 'rf__n_estimators': 50}
-    # R²: 0.5535147138143428
-    # RMSE: 0.22328066921910897
+    # === Модели ===
+    models = {
+        'catboost': CatBoostRegressor(
+            iterations=40,
+            max_depth=3,
+            learning_rate=0.15,
+            random_seed=42,
+            l2_leaf_reg=7,
+            verbose=0
+        ),
+        'random_forest': RandomForestRegressor(
+            random_state=42,
+            bootstrap=True,
+            max_depth=3,
+            min_samples_split=6,
+            min_samples_leaf=2,
+            n_estimators=20
+        ),
+        'ridge': Ridge(alpha=0.5),
+        'svr': SVR(
+            C=1,
+            epsilon=0.05,
+            gamma='scale'
+        )
+    }
 
-    # CatBoost
-    # params: {'catboost__bagging_temperature': 0, 'catboost__depth': 3, 'catboost__iterations': 50,
-    #          'catboost__l2_leaf_reg': 5, 'catboost__learning_rate': 0.1}
-    # RMSE(LOOCV): 0.10169803847922505
-    # R² (train set): 0.767628552492993
+    # === Пайплайн ===
+    pipelines = [
+        (name, Pipeline([('scaler', StandardScaler()), (name, model)]))
+        for name, model in models.items()
+    ]
+    ensemble = VotingRegressor(pipelines)
 
-    # SVR
-    # params: {'svr__C': 1, 'svr__coef0': 0.0, 'svr__degree': 2, 'svr__epsilon': 0.2, 'svr__gamma': 0.1,
-    # RMSE(LOOCV): 0.1052154231531089
-
-    # Ridge
-    # params: {'ridge__alpha': 10}
-    # RMSE(LOOCV): 0.14686108882238277
-
-    # Объявляем модели
-
-    model_cat = CatBoostRegressor(
-        iterations=50,  # число деревьев
-        depth=3,  # глубина дерева
-        learning_rate=0.1,  # скорость обучения
-        random_seed=42,
-        l2_leaf_reg=5,
-        bagging_temperature=0,
-        verbose=0  # убираем лог обучения
-    )
-
-    model_tree = RandomForestRegressor(
-        random_state=42,
-        bootstrap=True,
-        max_depth=5,
-        min_samples_split=5,
-        min_samples_leaf=1,
-        n_estimators=50
-    )
-
-    model_ridge = Ridge(alpha=10)
-
-    model_svr = SVR(
-        C=1,
-        coef0=0.0,
-        degree=2,
-        epsilon=0.2,
-        gamma=0.1
-    )
-
-    # 2. Создаём пайплайн
-    pipe_cat = Pipeline([
-        ('scaler', StandardScaler()),
-        ('catboost', model_cat)
-    ])
-
-    pipe_tree = Pipeline([
-        ('scaler', StandardScaler()),
-        ('rf', model_tree)
-    ])
-
-    pipe_ridge = Pipeline([
-        ('scaler', StandardScaler()),
-        ('ridge', model_ridge)
-    ])
-
-    pipe_svr = Pipeline([
-        ('scaler', StandardScaler()),
-        ('svr', model_svr)
-    ])
-
-    ensemble = VotingRegressor([
-        ('catboost', pipe_cat),
-        ('random_forest', pipe_tree),
-        ('ridge', pipe_ridge),
-        ('svr', pipe_svr)
-    ])
-
+    # === LOOCV ===
     loo = LeaveOneOut()
-
     y_true, y_pred = [], []
 
     for train_idx, test_idx in loo.split(X):
@@ -120,76 +94,106 @@ def main():
     print(f"LOOCV RMSE (ensemble): {rmse:.4f}")
     print(f"LOOCV R²   (ensemble): {r2:.4f}")
 
-    model_cat = CatBoostRegressor(
-        iterations=50,  # число деревьев
-        depth=3,  # глубина дерева
-        learning_rate=0.1,  # скорость обучения
-        random_seed=42,
-        l2_leaf_reg=5,
-        bagging_temperature=0,
-        verbose=0  # убираем лог обучения
-    )
+    # === Финальная модель ===
+    ensemble.fit(X, y)
 
-    model_tree = RandomForestRegressor(
-        random_state=42,
-        bootstrap=True,
-        max_depth=5,
-        min_samples_split=5,
-        min_samples_leaf=1,
-        n_estimators=50
-    )
+    # === Метрики ===
+    X_test = test.drop("target", axis=1).to_numpy()
+    y_test = test["target"].to_numpy()
 
-    model_ridge = Ridge(alpha=10)
+    pred = ensemble.predict(X_test)
 
-    model_svr = SVR(
-        C=1,
-        coef0=0.0,
-        degree=2,
-        epsilon=0.2,
-        gamma=0.1
-    )
+    for p, t in zip(pred, y_test):
+        print(f"{p:.4f} {t:.4f}")
 
-    # 2. Создаём пайплайн
+    rmse_test = np.sqrt(mean_squared_error(y_test, pred))
+    r2_test = r2_score(y_test, pred)
+    print(f"RMSE (по тестовой выборке): {rmse_test:.4f}")
+    print(f"R²   (по тестовой выборке): {r2_test:.4f}")
+
+
+def gridsearch():
+    # Best
+    # params: {'catboost__catboost__depth': 2, 'catboost__catboost__iterations': 40, 'catboost__catboost__l2_leaf_reg': 7,
+    #          'catboost__catboost__learning_rate': 0.15, 'random_forest__rf__max_depth': 3,
+    #          'random_forest__rf__max_features': 'sqrt', 'random_forest__rf__min_samples_leaf': 2,
+    #          'random_forest__rf__min_samples_split': 6, 'random_forest__rf__n_estimators': 20,
+    #          'ridge__ridge__alpha': 0.5, 'svr__svr__C': 1.0, 'svr__svr__epsilon': 0.05, 'svr__svr__gamma': 'scale'}
+    # Best
+    # RMSE: 0.26746196743823764
+
+    dataset, test = get_data()
+    X = dataset.drop("target", axis=1).to_numpy()
+    y = dataset["target"].to_numpy()
+
+    # Пайплайны моделей
     pipe_cat = Pipeline([
         ('scaler', StandardScaler()),
-        ('catboost', model_cat)
+        ('catboost', CatBoostRegressor(random_seed=42, verbose=0))
     ])
 
     pipe_tree = Pipeline([
         ('scaler', StandardScaler()),
-        ('rf', model_tree)
+        ('rf', RandomForestRegressor(random_state=42))
     ])
 
     pipe_ridge = Pipeline([
         ('scaler', StandardScaler()),
-        ('ridge', model_ridge)
+        ('ridge', Ridge())
     ])
 
     pipe_svr = Pipeline([
         ('scaler', StandardScaler()),
-        ('svr', model_svr)
+        ('svr', SVR())
     ])
 
-    ensemble_final = VotingRegressor([
+    ensemble = VotingRegressor([
         ('catboost', pipe_cat),
         ('random_forest', pipe_tree),
         ('ridge', pipe_ridge),
         ('svr', pipe_svr)
     ])
 
-    ensemble_final.fit(X, y)
+    # Параметры для GridSearch
+    param_grid = {
+        # CatBoost — уточняем вокруг лучших значений
+        'catboost__catboost__iterations': [40, 50, 60],  # ±10 от 50
+        'catboost__catboost__depth': [2, 3, 4],  # оставить, т.к. дискретный и важный
+        'catboost__catboost__learning_rate': [0.15, 0.2, 0.25],  # уточнить вокруг 0.2
+        'catboost__catboost__l2_leaf_reg': [3, 5, 7, 10],  # добавить больше регуляризации
 
-    X_test = test.drop("target", axis=1).to_numpy()
-    y_test = test["target"].to_numpy()
+        # Random Forest — уточнение
+        'random_forest__rf__n_estimators': [20, 30, 40],  # ±10 от 30
+        'random_forest__rf__max_depth': [2, 3, 4, None],  # добавить None на всякий случай
+        'random_forest__rf__min_samples_split': [4, 5, 6],  # ±1 от 5
+        'random_forest__rf__min_samples_leaf': [1, 2, 3],  # ±1 от 2
+        'random_forest__rf__max_features': ['sqrt'],  # оставить только лучшее
 
-    logit = ensemble_final.predict(X_test)
-    y_true, y_pred = np.array(logit), np.array(y_test)
-    for x, y in zip(logit, y_test):
-        print(f"{x:.4f} {y:.4f}")
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    r2 = r2_score(y_true, y_pred)
-    print(f"LRMSE (по тестовой выборке): {rmse:.4f}")
-    print(f"R²   (по тестовой выборке): {r2:.4f}")
+        # Ridge — расширить вокруг alpha=1
+        'ridge__ridge__alpha': [0.5, 0.8, 1.0, 1.5, 2.0, 5.0],  # тонкий поиск
+
+        # SVR — уточнение
+        'svr__svr__C': [0.8, 1.0, 1.2],  # ±0.2 от 1
+        'svr__svr__epsilon': [0.05, 0.1, 0.15],  # уточнить
+        'svr__svr__gamma': ['scale']  # оставить только лучшее
+    }
+
+    # GridSearchCV
+    grid_search = GridSearchCV(
+        ensemble,
+        param_grid,
+        scoring='neg_root_mean_squared_error',  # минимизируем RMSE
+        cv=5,
+        n_jobs=-1,
+        verbose=2
+    )
+
+    grid_search.fit(X, y)
+
+    print("Best params:", grid_search.best_params_)
+    print("Best RMSE:", -grid_search.best_score_)
+
 
 if __name__ == "__main__":
     main()
+    #gridsearch()

@@ -3,11 +3,12 @@ import pandas as pd
 import numpy as np
 import joblib as jl
 
+import config
 from training import change_mapping, uniq_ration, uniq_step, uniq_changed_ration, name_mapping
 
 
 def extract_to_row(ingridients):
-    row = [0] * (len(uniq_changed_ration) + len(uniq_step) - 5)  # todo: тут жесткий костыль
+    row = [0] * (len(uniq_changed_ration) + len(uniq_step))  # todo: тут жесткий костыль
     uniq_dict = {elem: ind for ind, elem in enumerate(uniq_changed_ration)}
     name_mapping = change_mapping()
 
@@ -25,14 +26,30 @@ def load_data_from_json(path_name: str):
     final_row = extract_to_row(rows)
     return final_row
 
+def clear_data(data):
+    for item in config.for_dropping:
+        data = data.drop(item, axis=1)
 
-def predict_from_file(json_report, model_path: str="models/classic_pipe/lasso_model.pkl"): # todo: надо наверн возвращать список кислот
-    model = jl.load(model_path)
+    for key, value in config.medians_of_data:
+        if data[key] is None:
+            data[key] = value
 
-    data = [load_data_from_json(json_report)]
-    pred = model.predict(data)
+    return data.to_numpy()
 
-    return pred
+def predict_from_file(json_report, model_path, acids_list):
+    acids_dict = dict()
 
-# if __name__ == '__main__':
-#     print(predict_from_file("../reports/report_2025-10-05_1759679897.json", "../../models/classic_pipe/ridge_model.pkl"))
+    data = load_data_from_json(json_report)
+    data = clear_data(data)
+
+    for acid in acids_list:
+        model = jl.load(f"{model_path}/{acid}_ensemble.pkl")
+        logit = model.predict(data)
+        acids_dict[acid] = logit
+
+    return acids_dict
+
+if __name__ == '__main__':
+    print(predict_from_file(json_report="../reports/report_2025-10-05_1759679897.json",
+                            model_path="../../models/classic_pipe/acids",
+                            acids_list=config.acids))

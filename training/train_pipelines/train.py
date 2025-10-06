@@ -30,8 +30,6 @@ def get_data():
         "CHO C uNDF (%)": dataset_all["CHO C uNDF (%)"].median()
     })
 
-    print(dataset_all.info())
-
     dataset, test = train_test_split(dataset_all, train_size=0.9)
     #print(f"size of train {len(dataset)}")
     #print(f"size of test {len(test)}")
@@ -43,6 +41,7 @@ def main():
     dataset, test = get_data()
     X = dataset.drop("target", axis=1).to_numpy()
     y = dataset["target"].to_numpy()
+
 
     # === Модели ===
     models = {
@@ -115,17 +114,19 @@ def main():
     print(f"R²   (по тестовой выборке): {r2_test:.4f}")
 
     # === Сохраняем модель ===
-    joblib.dump(ensemble, '../../models/classic_pipe/ensemble.pkl')
+    joblib.dump(ensemble, '../../models/classic_pipe/acids/ensemble.pkl')
 
 
     # === Смотрим что влияет ===
+    # feature_names = dataset.drop("target", axis=1).columns.tolist()
+    # sample_idx = 0
+    # x_single = X_test[sample_idx:sample_idx + 1]
+    #
+    # explainer = shap.Explainer(ensemble.predict, X, feature_names=feature_names)
+    # shap_values_single = explainer(x_single)
 
-    # Создаём explainer
-    explainer = shap.Explainer(ensemble.predict, X)
-    shap_values = explainer(X)
-
-    # Визуализация (требует matplotlib)
-    shap.summary_plot(shap_values, X, feature_names=dataset.drop("target", axis=1).columns)
+    #shap.plots.waterfall(shap_values_single[0], max_display=len(dataset.columns))
+    # shap.summary_plot(shap_values_single, x_single, feature_names=feature_names)
 
 
 def gridsearch():
@@ -287,7 +288,71 @@ def params_for_ensamble():
     print(weight)
     # weight = [0.273, 0.259, 0.21, 0.258]
 
+def predict_nutr():
+    model = CatBoostRegressor(
+            iterations=40,
+            max_depth=2,
+            learning_rate=0.15,
+            random_seed=42,
+            l2_leaf_reg=7,
+            verbose=0
+    )
+    pipe_cat = Pipeline([
+        ('scaler', StandardScaler()),
+        ('catboost', model)
+    ])
+
+    uniq_step = ['K (%)', 'aNDFom фуража (%)', 'СЖ (%)', 'Растворимая клетчатка (%)',
+                 'Крахмал (%)', 'peNDF (%)', 'aNDFom (%)', 'ЧЭЛ 3x NRC (МДжоуль/кг)',
+                 'Сахар (ВРУ) (%)', 'ОЖК (%)', 'НВУ (%)', 'CHO C uNDF (%)', 'СП (%)',
+                 ]
+    dataset, test = get_data()
+
+    X = dataset.drop(uniq_step + ['target'], axis=1).to_numpy()
+
+    for ind, target in enumerate(uniq_step):
+        print(f"=== {target} ===")
+        y = dataset[target].to_numpy()
+        loo = LeaveOneOut()
+        y_true, y_pred = [], []
+
+        for train_idx, test_idx in loo.split(X):
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
+
+            pipe_cat.fit(X_train, y_train)
+            pred = pipe_cat.predict(X_test)
+
+            y_true.append(y_test[0])
+            y_pred.append(pred[0])
+
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+        r2 = r2_score(y_true, y_pred)
+        print(f"LOOCV RMSE (LOOCV): {rmse:.4f}")
+        print(f"LOOCV R²   (LOOCV): {r2:.4f}")
+
+        pipe_cat.fit(X, y)
+
+        # === Метрики ===
+        X_test = test.drop(uniq_step + ["target"], axis=1).to_numpy()
+        y_test = test[target].to_numpy()
+
+        pred = pipe_cat.predict(X_test)
+
+        for p, t in zip(pred, y_test):
+             print(f"{p:.4f} {t:.4f}")
+
+        rmse_test = np.sqrt(mean_squared_error(y_test, pred))
+        r2_test = r2_score(y_test, pred)
+        print(f"RMSE (по тестовой выборке): {rmse_test:.4f}")
+        print(f"R²   (по тестовой выборке): {r2_test:.4f}")
+
+        joblib.dump(pipe_cat, f'../../models/classic_pipe/nutri/{ind}_catboost.pkl')
+
+
 if __name__ == "__main__":
-    main()
+    #main()
     #gridsearch()
     #params_for_ensamble()
+    predict_nutr()

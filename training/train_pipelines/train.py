@@ -10,6 +10,8 @@ from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSe
 from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut, KFold
 from training.train_pipelines.ohe_lin import get_ohe_train_test_data, get_ohe_step_data
+import joblib
+
 
 def get_data():
     dataset_all = get_ohe_step_data()
@@ -30,8 +32,8 @@ def get_data():
     # print(dataset_all.info())
 
     dataset, test = train_test_split(dataset_all, train_size=0.9)
-    print(f"size of train {len(dataset)}")
-    print(f"size of test {len(test)}")
+    #print(f"size of train {len(dataset)}")
+    #print(f"size of test {len(test)}")
 
     return dataset, test
 
@@ -72,7 +74,7 @@ def main():
         (name, Pipeline([('scaler', StandardScaler()), (name, model)]))
         for name, model in models.items()
     ]
-    ensemble = VotingRegressor(pipelines)
+    ensemble = VotingRegressor(pipelines, weights=[0.273, 0.259, 0.21, 0.258])
 
     # === LOOCV ===
     loo = LeaveOneOut()
@@ -110,6 +112,9 @@ def main():
     r2_test = r2_score(y_test, pred)
     print(f"RMSE (по тестовой выборке): {rmse_test:.4f}")
     print(f"R²   (по тестовой выборке): {r2_test:.4f}")
+
+    # Сохраняем модель
+    joblib.dump(ensemble, '../../models/classic_pipe/ensemble.pkl')
 
 
 def gridsearch():
@@ -193,7 +198,85 @@ def gridsearch():
     print("Best params:", grid_search.best_params_)
     print("Best RMSE:", -grid_search.best_score_)
 
+def params_for_ensamble():
+    dataset, test = get_data()
+    X = dataset.drop("target", axis=1).to_numpy()
+    y = dataset["target"].to_numpy()
+
+    pipe_cat = Pipeline([
+        ('scaler', StandardScaler()),
+        ('catboost', CatBoostRegressor(
+            iterations=40,
+            max_depth=3,
+            learning_rate=0.15,
+            random_seed=42,
+            l2_leaf_reg=7,
+            verbose=0
+        ))
+    ])
+
+    pipe_tree = Pipeline([
+        ('scaler', StandardScaler()),
+        ('rf', RandomForestRegressor(
+            random_state=42,
+            bootstrap=True,
+            max_depth=3,
+            min_samples_split=6,
+            min_samples_leaf=2,
+            n_estimators=20
+        ))
+    ])
+
+    pipe_ridge = Pipeline([
+        ('scaler', StandardScaler()),
+        ('ridge', Ridge(alpha=10))
+    ])
+
+    pipe_svr = Pipeline([
+        ('scaler', StandardScaler()),
+        ('svr', SVR(
+            C=1,
+            epsilon=0.05,
+            gamma='scale'
+        ))
+    ])
+
+    mean_rmse = [0, 0, 0, 0]
+
+    for _ in range(10):
+        for ind, model in enumerate([pipe_cat, pipe_tree, pipe_ridge, pipe_svr]):
+            loo = LeaveOneOut()
+            y_true, y_pred = [], []
+
+            for train_idx, test_idx in loo.split(X):
+                X_train, X_test = X[train_idx], X[test_idx]
+                y_train, y_test = y[train_idx], y[test_idx]
+
+                model.fit(X_train, y_train)
+                pred = model.predict(X_test)
+
+                y_true.append(y_test[0])
+                y_pred.append(pred[0])
+
+            y_true, y_pred = np.array(y_true), np.array(y_pred)
+            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+            mean_rmse[ind] += rmse
+
+    mean_rmse = [f"{item / 10:.4f}" for item in mean_rmse]
+    print("Средний RMSE по 10 обучениям по LOOCV")
+    print(f"CatBoost - {mean_rmse[0]}")
+    print(f"RandomTree - {mean_rmse[1]}")
+    print(f"Ridge - {mean_rmse[2]}")
+    print(f"SVR - {mean_rmse[3]}")
+    print("Коэффициенты для моделей")
+    weight = []
+    for item in mean_rmse:
+        weight.append(1 / float(item))
+    weight = [round(item / sum(weight), 3) for item in weight]
+    print(weight)
+    # weight = [0.273, 0.259, 0.21, 0.258]
 
 if __name__ == "__main__":
     main()
     #gridsearch()
+    #params_for_ensamble()

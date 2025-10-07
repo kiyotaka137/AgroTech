@@ -85,13 +85,16 @@ QScrollBar:vertical, QScrollBar:horizontal {
     border: none;
     margin: 0;
 }
+
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
     background: #a6a6a6 !important;
     min-height: 20px;
 }
+
 QScrollBar::handle:hover {
     background: #808080 !important;
 }
+
 QScrollBar::add-line, QScrollBar::sub-line {
     background: none;
     border: none;
@@ -139,12 +142,23 @@ QTabBar::tab:selected {
     background: #fafafa !important;
     color: #000 !important;
     font-weight: 600;
-    border-bottom: 2px solid #66aaff !important;
+    border-bottom: none !important;
 }
+
 
 QTabBar::tab:hover {
     background: #eeeeee !important;
 }
+
+/* Убрать линию под вкладками на уровне QSS */
+QTabBar {
+    qproperty-drawBase: 0;
+}
+
+QTabWidget::pane {
+    border: none;       /* на всякий случай */
+}
+
 
 /* === Текстовое поле (QTextEdit) === */
 QTextEdit {
@@ -201,6 +215,7 @@ QTableView::viewport {
     color: #222 !important;
     gridline-color: #e6e6e6 !important;
     border: 1px solid #e6e6e6 !important;
+
 }
 
 QHeaderView::section {

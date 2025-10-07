@@ -152,23 +152,35 @@ class RationTableWidget(QWidget):
 
     # === JSON API ===
     def load_from_json(self, ration_data):
-        """Заполняет таблицу из массива JSON"""
+        """
+        Заполняет таблицу из массива JSON.
+        ration_data может быть:
+        - {"rows": [...]} — список словарей
+        - [[...], [...]] — список списков
+        """
+        # Если пришел словарь с ключом "rows"
+        if isinstance(ration_data, dict) and "rows" in ration_data:
+            ration_data = ration_data["rows"]
+
+        # Если это список словарей, конвертируем в список списков
+        normalized_data = []
+        for row in ration_data:
+            if isinstance(row, dict):
+                normalized_data.append([row.get(col, "") for col in COLUMNS])
+            else:
+                normalized_data.append(row)
+
         self.table.setRowCount(0)
-        for row_data in ration_data:
+        for row_data in normalized_data:
             self.add_row(default=False)
             row = self.table.rowCount() - 1
             for c, col_name in enumerate(COLUMNS):
                 value = row_data[c] if c < len(row_data) else ""
-                if col_name == "Ингредиенты":
-                    cb = self.table.cellWidget(row, c)
-                    if value in INGREDIENT_TYPES:
-                        cb.setCurrentIndex(INGREDIENT_TYPES.index(value))
-                else:
-                    item = self.table.item(row, c)
-                    if item:
-                        item.setText(str(value))
-        self.status_label.setText(f"Загружено {len(ration_data)} строк")
-        # Пересчитываем размеры после загрузки данных
+                item = self.table.item(row, c)
+                if item:
+                    item.setText(str(value))
+
+        self.status_label.setText(f"Загружено {len(normalized_data)} строк")
         QTimer.singleShot(0, self.setup_columns_ratio)
 
     def to_json(self):

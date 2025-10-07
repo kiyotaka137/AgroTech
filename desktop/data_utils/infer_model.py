@@ -55,11 +55,7 @@ def clear_data(data):
     return data.to_numpy()
 
 
-def predict_importance():
-    pass
-
-
-def predict_from_file(json_report, model_path="models/classic_pipe"):
+def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     acids_dict = dict()
 
     data = load_data_from_json(json_report)

@@ -1,5 +1,5 @@
 # new_report_window.py
-import sys
+import os
 import json
 import time
 from datetime import date, datetime
@@ -90,6 +90,8 @@ class NewReport(QDialog):
             self.add_row_for_left_table()
 
         QTimer.singleShot(100, self.setup_columns_ratio)
+        self.reports_dir = Path("desktop/reports")
+
 
     def resizeEvent(self, event):
         """При изменении размера окна пересчитываем столбцы"""
@@ -935,26 +937,31 @@ class NewReport(QDialog):
                 "nutrients_rows": self._collect_table_data(self.right_table)
             }
 
-            # Папка для сохранения
-            reports_dir = Path("desktop/reports")
-            reports_dir.mkdir(parents=True, exist_ok=True)
-
             # Формируем имя файла: имя_дата_время.json
-            safe_name = self.name_edit.text().strip() or "report"
+            safe_name = self.name_edit.text().strip() or "report"  # todo: имя Unnamed если без имени
             # очищаем пробелы и запрещённые символы простым способом
             safe_name = "".join(ch for ch in safe_name if ch.isalnum() or ch in ("-", "_")).strip() or "report"
             filename = f"{safe_name}_{date.today().isoformat()}_{int(time.time())}.json"
-            file_path = reports_dir / filename
+            file_path = self.reports_dir / filename
 
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
             # работа мл моделей
-            result_acids = predict_from_file(file_path)
-            data["result_acids"] = {
-                k: float(v[0])
-                for k, v in result_acids.items()
-            }
+            try:
+                result_acids = predict_from_file(file_path)
+                data["result_acids"] = {
+                    k: float(v[0])
+                    for k, v in result_acids.items()
+                }
+            except Exception as e:
+                mb = QMessageBox(self)
+                mb.setIcon(QMessageBox.Icon.Critical)
+                mb.setWindowTitle("Ошибка")
+                mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
+                mb.exec()
+                self.status_label.setText("Ошибка при сохранении JSON.")
+                os.remove(file_path)
 
             data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
 
@@ -1067,4 +1074,79 @@ class NewReport(QDialog):
             data.append(row)
         return data
 
+
+class RefactorReport(NewReport):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.json_path = None
+
+
+    def _finish_analysis(self):
+        """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
+        loading_dialog = self._loading_dialog
+
+        try:
+            with open(self.json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+
+            with open(self.json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            # работа мл моделей
+            try:
+                result_acids = predict_from_file(self.json_path)
+                data["result_acids"] = {
+                    k: float(v[0])
+                    for k, v in result_acids.items()
+                }
+            except Exception as e:
+                mb = QMessageBox(self)
+                mb.setIcon(QMessageBox.Icon.Critical)
+                mb.setWindowTitle("Ошибка")
+                mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
+                mb.exec()
+                self.status_label.setText("Ошибка при сохранении JSON.")
+
+
+            data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
+
+            # Перезаписываем файл с добавленным результатом
+            with open(self.json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+        except Exception as e:
+            # Используем экземпляр QMessageBox для показа ошибки
+            mb = QMessageBox(self)
+            mb.setIcon(QMessageBox.Icon.Critical)
+            mb.setWindowTitle("Ошибка")
+            mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
+            mb.exec()
+            self.status_label.setText("Ошибка при сохранении JSON.")
+
+        finally:
+            # Остановим анимацию, если была
+            try:
+                if getattr(self, "_loading_movie", None) is not None:
+                    try:
+                        self._loading_movie.stop()
+                    except Exception:
+                        pass
+                    self._loading_movie = None
+            except Exception:
+                pass
+
+            # Закрываем окно загрузки и включаем кнопку
+            try:
+                if loading_dialog is not None:
+                    loading_dialog.close()
+            except Exception:
+                pass
+            self.analyze_btn.setEnabled(True)
+            self._loading_dialog = None
+
+    def get_json_path(self, path):
+        self.json_path = path
 

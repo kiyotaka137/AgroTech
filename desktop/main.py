@@ -12,9 +12,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, QFileSystemWatcher
 
-from report_loader import ReportLoader
-from new_report_window import NewReport
-from report_list_item import ReportListItem
+from .report_loader import ReportLoader
+from .report_list_item import ReportListItem
+from .new_report_window import NewReport
 
 
 class MainWindow(QWidget):
@@ -305,7 +305,8 @@ class MainWindow(QWidget):
             return
 
         report_file = item.data(Qt.ItemDataRole.UserRole)
-        print(report_file)#путь находится правильно
+        print(report_file)
+        #print(report_file)#путь находится правильно
         #снизу в комменте какой то бред
         '''
         if not report_file:
@@ -322,11 +323,15 @@ class MainWindow(QWidget):
         '''
         # Попытка загрузить сначала по полному пути, затем по basename(зачем это надо)
         report_data = self.report_loader.load_report(report_file)
-        print(report_data)
-        # === Рацион ===
-        ration_array = report_data.get("rows", None)
-        print("массив с рационом",ration_array) #работает
+        #print(report_data)
+
+        ration_array = report_data.get("ration_rows", None)
+        nutrient_array = report_data.get("nutrients_rows", None)
+
+        #print("массив с рационом",ration_array) #работает
         self.tab_ration_widget.load_from_json(ration_array,"left")
+        self.tab_ration_widget.load_from_json(nutrient_array,"right")
+
         self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
         '''
         shown = False
@@ -357,7 +362,7 @@ class MainWindow(QWidget):
             self.ration_stack.setCurrentIndex(1)
 
         # === Текстовый отчет ===
-        report_text = report_data.get("report_text", "")
+        report_text = report_data.get("report", "")
         self.tab_report.setPlainText(report_text or "")
 
     def on_reports_dir_changed(self, path):

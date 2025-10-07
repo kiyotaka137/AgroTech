@@ -10,7 +10,7 @@ COLUMNS = ['Ингредиенты', 'СВ %', 'ГП кг', 'СВ кг', '% ГП
 def parse_excel_ration(
     path: str,
     sheet: Optional[str | int] = 0
-) -> List[Tuple[Any, Any, Any, Any, Any]]:
+) -> List[Tuple[Any, Any]]:
     """
     Читает Excel и возвращает список кортежей в порядке COLUMNS
     """
@@ -61,7 +61,8 @@ def parse_excel_ration(
     df = df[COLUMNS]
     df = df.dropna(how="all")
 
-    rows: List[Tuple[Any, Any, Any, Any, Any]] = list(df.itertuples(index=False, name=None))
+    full_rows: List[Tuple[Any, Any, Any, Any, Any]] = list(df.itertuples(index=False, name=None))
+    rows = [(row[0], row[5]) for row in full_rows]
     return rows
 
 
@@ -116,20 +117,19 @@ def parse_pdf_for_tables(pdf_path: str):
                         row.append(float(cleaned))
                     except ValueError:
                         row.append(cleaned)
-            ration_data.append(row)
+            ration_data.append([row[0], row[5]])
 
     step_table = parse_step_table(text)
     return ration_data, step_table
 
 
-def parse_step_table(text: str) -> Optional[List[Dict[str, Optional[float]]]]:
+def parse_step_table(text: str):
     """
-    Парсит из PDF раздел 'Сводный анализ: Лактирующая корова'
+    Парсит из текста PDF раздел 'Сводный анализ: Лактирующая корова'
     и возвращает только два поля: name (нутриент) и dm (значение по СВ).
 
     Формат результата: [{"name": str, "dm": float|None}, ...]
     """
-    # --- helpers ---
 
     def to_float(s: str) -> Optional[float]:
         if not s:
@@ -143,18 +143,23 @@ def parse_step_table(text: str) -> Optional[List[Dict[str, Optional[float]]]]:
     if not text:
         return None
 
-    # --- isolate block ---
+    # --- Ищем начало раздела ---
     start_pat = r"Сводный анализ:\s*Лактирующая корова"
-    end_pat = r"(Экономический отчет|Единица\s+Всего\s+Единица\s+Закуплено|$)"
-
     sm = re.search(start_pat, text, flags=re.IGNORECASE)
     if not sm:
         return None
-    em = re.search(end_pat, text[sm.end():], flags=re.IGNORECASE)
-    block = text[sm.end(): sm.end() + em.start()] if em else text[sm.end():]
 
+    # Берём всё после заголовка
+    block = text[sm.end():]
+
+    # --- Обрезаем, если нашли следующий крупный раздел ---
+    # Ищем что-то вроде "Сводка", "Экономический отчёт", "Рецепт" и т.п.
+    next_section = re.search(r"\b(Сводка|Экономический|Рецепт|Ингредиенты)\b", block, flags=re.IGNORECASE)
+    if next_section:
+        block = block[:next_section.start()]
+
+    # --- Обработка строк ---
     lines = [ln.strip() for ln in block.splitlines()]
-    # убрать пустые и заголовки
     lines = [
         ln for ln in lines
         if ln
@@ -162,37 +167,27 @@ def parse_step_table(text: str) -> Optional[List[Dict[str, Optional[float]]]]:
         and not re.match(r"^(Единица|Итого|Всего)\b", ln, re.IGNORECASE)
     ]
 
-    # Паттерны:
-    # 5 колонок: name | unit1 | dm | content | unit2  (берём name и dm)
-    pat5 = re.compile(
-        r"^(?P<name>.+?)\s+\S+\s+(?P<dm>[\d\s,]+)\s+[\d\s,]+\s+\S+\s*$"
-    )
-    # 3 колонки: name | unit1 | dm (берём name и dm)
-    pat3 = re.compile(
-        r"^(?P<name>.+?)\s+\S+\s+(?P<dm>[\d\s,]+)\s*$"
-    )
+    # Паттерны для разных форматов
+    pat5 = re.compile(r"^(?P<name>.+?)\s+\S+\s+(?P<dm>[\d\s,]+)\s+[\d\s,]+\s+\S+\s*$")
+    pat3 = re.compile(r"^(?P<name>.+?)\s+\S+\s+(?P<dm>[\d\s,]+)\s*$")
 
-    out: List[Dict[str, Optional[float]]] = []
+    out = {}
 
     for raw in lines:
-        m = pat5.match(raw)
-        if not m:
-            m = pat3.match(raw)
-
+        m = pat5.match(raw) or pat3.match(raw)
         if m:
             name = re.sub(r"\s+", " ", m.group("name")).strip(" :")
             dm = to_float(m.group("dm"))
-            out.append({"name": name, "dm": dm})
+            out[name] = dm
             continue
 
-        # Фоллбек на случай OCR-искажений: искать первое число как dm
+        # fallback: ищем первое число
         parts = raw.split()
-        # индекс первого «числового» токена
         num_idx = next((i for i, t in enumerate(parts) if re.fullmatch(r"[\d\s,]+", t)), None)
         if num_idx is not None and num_idx >= 1:
             name = " ".join(parts[:num_idx-1]).strip(" :") or parts[0]
             dm = to_float(parts[num_idx])
-            out.append((name, dm))
+            out[name] = dm
 
     return out
 
@@ -216,8 +211,9 @@ def extract_text_with_pypdf2(pdf_path):
 
 
 if __name__ == "__main__":
-    #print(parse_excel_ration("test_data/Гилево Д1 25.07.25_АФМ.xlsx"))
-    pdf_path = "test_data/Д1 ЖК Пеневичи 20.06.2025.pdf"
-    ration_table = parse_pdf_for_tables(pdf_path)
-    step = parse_step_table(pdf_path)
+    print(sum([i for _, i in parse_excel_ration("test_data/Гилево Д1 25.07.25_АФМ.xlsx")]))
+    pdf_path = "test_data/Д0 Высокое 25.02.25_ЭНАЛБ.pdf"
+    ration_table = parse_pdf_for_tables(pdf_path)[0]
+    step = parse_step_table(extract_text_with_pypdf2(pdf_path))
     print(step)
+    print([i for _, i in ration_table])

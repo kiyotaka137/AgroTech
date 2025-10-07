@@ -19,11 +19,11 @@ class ReportLoader:
         """
         Считывает JSON файл по имени и возвращает словарь
         """
-        file_path = self.reports_path / filename
-        if not file_path.exists():
-            raise FileNotFoundError(f"Файл {filename} не найден в папке {self.reports_path}")
+        # file_path = self.reports_path / filename
+        # if not file_path.exists():
+        #     raise FileNotFoundError(f"Файл {filename} не найден в папке {self.reports_path}")
         
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data
 

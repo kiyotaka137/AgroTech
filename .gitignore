@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+*.gguf
+models/Qwen2.5-0.5B-Instruct-f16.gguf
+
 # Distribution / packaging
 .Python
 build/

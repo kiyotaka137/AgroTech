@@ -14,9 +14,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QMovie
 from PyQt6.QtCore import (Qt, QTimer, QSize)
 
-from data_utils import  parse_excel_ration, parse_pdf_for_tables
-COLUMNSLEFT = ["Ингридиенты","%СВ"]
+from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
+
+ROWSLEFT = ['K (%)', 'aNDFom фуража (%)', 'СЖ (%)', 'CHO B3 медленная фракция (%)', 'Растворимая клетчатка (%)', 'Крахмал (%)', 'peNDF (%)', 'aNDFom (%)', 'ЧЭЛ 3x NRC (МДжоуль/кг)', 'CHO B3 pdNDF (%)', 'Сахар (ВРУ) (%)', 'НСУ (%)', 'ОЖК (%)', 'НВУ (%)', 'CHO C uNDF (%)', 'СП (%)', 'RD Крахмал 3xУровень 1 (%)']
+COLUMNSLEFT = ["Ингредиенты","%СВ"]
 COLUMNSRIGHT=["Нутриент","СВ"]
+
+
 class NewReport(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,9 +46,9 @@ class NewReport(QDialog):
         self._build_main()
         self._build_statusbar()
 
-        # стартовая строка-пример
-        self.add_row_for_right_table()
-        self.add_row_for_left_table()
+        # стартовые 5 строк
+        for _ in range(5):
+            self.add_row_for_left_table()
 
         QTimer.singleShot(100, self.setup_columns_ratio)
 
@@ -110,7 +114,7 @@ class NewReport(QDialog):
         self.right_table.verticalHeader().setVisible(False)
         self.right_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.right_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        
+
         # Таблица ингридиенты( левая)
         self.left_table = QTableWidget(0, 2)
         self.left_table.setHorizontalHeaderLabels(COLUMNSLEFT)
@@ -169,23 +173,30 @@ class NewReport(QDialog):
         background-color: #e0e0e0; 
     }
 """)
+
+        # заполняется начальными значениями правая таблица нутриенов
+        for r, nutrient in enumerate(ROWSLEFT):
+            self.add_row_for_right_table()
+            item = QTableWidgetItem(nutrient)
+            self.right_table.setItem(r, 0, item)
+
+        for row in range(self.right_table.rowCount()):
+            # Первый столбец — фиксированный (нельзя редактировать)
+            item_fixed = self.right_table.item(row, 0)
+            item_fixed.setFlags(item_fixed.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+
         # добавить/удалить  для левой таблицы
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.addWidget(self._make_button("Добавить строку", self.add_row_for_left_table))
         left_buttons_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected_for_left_table))
         left_buttons_layout.addStretch()
 
-        #добавить/удалить для правой таблицы
-        right_buttons_layout = QHBoxLayout()
-        right_buttons_layout.addWidget(self._make_button("Добавить строку", self.add_row_for_right_table))
-        right_buttons_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected_for_right_table))
-        right_buttons_layout.addStretch()
 
         #сплитер для разделения таблиц
         splitter=QSplitter(Qt.Orientation.Horizontal)
         left_layout.addWidget(self.left_table)
         right_layout.addWidget(self.right_table)
-        right_layout.addLayout(right_buttons_layout)
         left_layout.addLayout(left_buttons_layout)
         splitter.addWidget(left_container)
         splitter.addWidget(right_container)
@@ -248,6 +259,8 @@ class NewReport(QDialog):
             item = QTableWidgetItem("")
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.left_table.setItem(row, c, item)
+
+
     def add_row_for_right_table(self):
         table = self.right_table
         columns=COLUMNSRIGHT
@@ -262,6 +275,7 @@ class NewReport(QDialog):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.left_table.setItem(row, c, item)
 
+
     def remove_selected_for_left_table(self):
         table = self.left_table
         selected = table.selectionModel().selectedRows()
@@ -270,6 +284,7 @@ class NewReport(QDialog):
         rows = sorted([idx.row() for idx in selected], reverse=True)
         for row in rows:
             table.removeRow(row)
+
 
     def remove_selected_for_right_table(self):
         table=self.right_table
@@ -309,8 +324,41 @@ class NewReport(QDialog):
 
                 self.left_table.setItem(r, c, item)
 
+    def filling_right_table_from_file(self, rows_dict):
+        """
+        Заполняет правую колонку значениями из словаря, используя значения левой колонки как ключи
+        """
+        # Проходим по всем строкам таблицы
+        for row in range(self.right_table.rowCount()):
+            # Получаем значение из левой колонки (ключ)
+            key_item = self.right_table.item(row, 0)
 
-    def choose_excel_file(self):  # todo: загрузка excel таблицы в self.left_table использовать parse_excel из data_utils можно импортить как from data_utils
+            if key_item is not None:
+                key_text = " ".join(key_item.text().split(" ")[:-1])
+
+                # Ищем соответствующее значение в словаре
+                value = rows_dict.get(key_text)  # Используем get чтобы избежать KeyError
+
+                # Создаем или получаем элемент для правой колонки
+                value_item = self.right_table.item(row, 1)
+                if value_item is None:
+                    value_item = QTableWidgetItem()
+                    self.right_table.setItem(row, 1, value_item)
+
+                # Форматируем и устанавливаем значение
+                def fmt(v) -> str:
+                    if isinstance(v, float):
+                        return f"{v:.3f}".replace(".", ",")
+                    return "" if v is None else str(v)
+
+                value_item.setText(fmt(value))
+
+                # Устанавливаем выравнивание и флаги
+                # value_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                # value_item.setFlags(value_item.flags() | Qt.ItemFlag.ItemIsEditable)
+
+
+    def choose_excel_file(self):  # todo: после того как будет переделанна функция парсинга пофиксить для двух таблиц
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
         if path:
             self.excel_path = path
@@ -320,31 +368,41 @@ class NewReport(QDialog):
             self.filling_left_table_from_file(rows)
 
 
-    def choose_pdf_file(self):  # todo: загрузка pdf таблицы в self.left_table, аналогично excel
+    def choose_pdf_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать PDF файл", "", "PDF files (*.pdf);;Все файлы (*)")
         if path:
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
-            rows = parse_pdf_for_tables(path)
-            self.filling_left_table_from_file(rows)
+            rows_rationtable, rows_nutrient = parse_pdf_for_tables(path)
+            print(rows_nutrient)
+            self.filling_left_table_from_file(rows_rationtable)
+            self.filling_right_table_from_file(rows_nutrient)
 
-    def _collect_left_table_data(self):
+
+    def _collect_table_data(self, table):
         """Собираем данные из таблицы в список словарей"""
+        if table == self.left_table:
+            cols = COLUMNSLEFT
+        else:
+            cols = COLUMNSRIGHT
+
         rows = []
-        for r in range(self.left_table.rowCount()):
+        for r in range(table.rowCount()):
             row_data = {}
             empty_row = True
-            for c, col_name in enumerate(COLUMNSLEFT):
-                item = self.left_table.item(r, c)
+            for c, col_name in enumerate(cols):
+                item = table.item(r, c)
                 text = item.text() if item is not None else ""
                 if text.strip():
                     empty_row = False
                 row_data[col_name] = text
-            # Пропускаем полностью пустые строки
+
             if not empty_row:
                 rows.append(row_data)
+
         return rows
+
 
     def analyze_clicked(self):
         """
@@ -409,6 +467,7 @@ class NewReport(QDialog):
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
         loading_dialog = self._loading_dialog
+
         try:
             data = {
                 "meta": {
@@ -418,7 +477,8 @@ class NewReport(QDialog):
                     "excel": self.excel_path or None,
                     "created_at": datetime.now().isoformat()
                 },
-                "rows": self._collect_left_table_data()
+                "ration_rows": self._collect_table_data(self.left_table),
+                "nutrients_rows": self._collect_table_data(self.right_table)
             }
 
             # Папка для сохранения
@@ -435,6 +495,18 @@ class NewReport(QDialog):
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
+            # работа мл моделей
+            result_acids = predict_from_file(file_path)
+            data["result_acids"] = {
+                k: float(v[0])
+                for k, v in result_acids.items()
+            }
+
+            data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
+
+            # Перезаписываем файл с добавленным результатом
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
 
 
         except Exception as e:
@@ -467,8 +539,10 @@ class NewReport(QDialog):
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
             self.close()
+
+
     # === JSON API ===
-    def load_from_json(self, ration_data,type_of_table):
+    def load_from_json(self, data, type_of_table):
         """Заполняет таблицу из массива JSON"""
         '''
         if type_of_table=="left":
@@ -485,39 +559,48 @@ class NewReport(QDialog):
             # Пересчитываем размеры после загрузки данных
             QTimer.singleShot(0, self.setup_columns_ratio)
         '''
+
         if type_of_table == "left":
             self.left_table.setRowCount(0)  # Очищаем таблицу
     
-            for row_data in ration_data:
+            for row_data in data:
                 row_position = self.left_table.rowCount()
                 self.left_table.insertRow(row_position)  # Добавляем новую строку
-                
-                # Заполняем ячейки, используя ключи словаря
+
                 # Первая колонка: "Ингредиенты"
                 ingredient_value = row_data.get("Ингредиенты", "")
                 ingredient_item = QTableWidgetItem(str(ingredient_value))
                 self.left_table.setItem(row_position, 0, ingredient_item)
-                
-                # Вторая колонка: "СВ %"
-                sv_value = row_data.get("СВ %", "")
+
+                sv_value = row_data.get("%СВ", "")
                 sv_item = QTableWidgetItem(str(sv_value))
                 self.left_table.setItem(row_position, 1, sv_item)
-            
-            self.status_label.setText(f"Загружено {len(ration_data)} строк")
+
+            self.status_label.setText(f"Загружено {len(data)} строк")
             QTimer.singleShot(0, self.setup_columns_ratio)
-        if type_of_table=="right":
-            self.right_table.setRowCount(0)
-            for row_data in ration_data:
-                self.add_row_for_right_table()
-                row = self.right_table.rowCount() - 1
-                for c in range(2):
-                    value = row_data[c] if c < len(row_data) else ""
-                    item = self.right_table.item(row, c)
-                    if item:
-                        item.setText(str(value))
-            self.status_label.setText(f"Загружено {len(ration_data)} строк")
-            # Пересчитываем размеры после загрузки данных
-            QTimer.singleShot(0, self.setup_columns_ratio)
+
+        if type_of_table == "right":
+            nutrients = {nutrient["Нутриент"]: nutrient["СВ"] for nutrient in data}
+
+            for row in range(self.right_table.rowCount()):
+                # Получаем значение из левой колонки (ключ)
+                key_item = self.right_table.item(row, 0)
+
+
+                if key_item is not None:
+                    #key_text = " ".join(key_item.text().split(" ")[:-1])
+                    key_text = key_item.text()
+
+                    # Ищем соответствующее значение в словаре
+                    value = nutrients.get(key_text)  # Используем get чтобы избежать KeyError
+                    print(key_text, value)
+                    # Создаем или получаем элемент для правой колонки
+                    value_item = self.right_table.item(row, 1)
+                    if value_item is None:
+                        value_item = QTableWidgetItem()
+                        self.right_table.setItem(row, 1, value_item)
+
+                    value_item.setText(value)
 
     def to_json(self):
         """Возвращает содержимое таблицы как список списков"""

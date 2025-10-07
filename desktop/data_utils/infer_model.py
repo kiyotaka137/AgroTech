@@ -151,7 +151,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         importance = predict_importance_acids(data[0], acid)
         importance_acid_dict[acid] = importance
 
-    print(importance_dict)
+    #print(importance_dict)
     return acids_dict
 
 

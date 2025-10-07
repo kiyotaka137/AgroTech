@@ -20,6 +20,41 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     await app.state.db_pool.close()
+'''
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    app.state.db_pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=1, max_size=10)
+    
+    # Создаем таблицу если не существует
+    async with app.state.db_pool.acquire() as conn:
+        try:
+            # Проверяем существование таблицы
+            table_exists = await conn.fetchval(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'records')"
+            )
+            
+            if not table_exists:
+                await conn.execute("""
+                    CREATE TABLE records (
+                        id UUID PRIMARY KEY,
+                        data JSONB NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                """)
+                print("Таблица records создана")
+            else:
+                print("Таблица records уже существует")
+                
+        except Exception as e:
+            print(f" Ошибка при работе с таблицей: {e}")
+            raise
+    
+    yield
+    
+    # Shutdown
+    await app.state.db_pool.close()
+'''
 
 app = FastAPI(title="Records API", lifespan=lifespan)
 

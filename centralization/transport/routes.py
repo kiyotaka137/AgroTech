@@ -105,3 +105,16 @@ async def get_record(name: str, service: RecordsService = Depends(get_service)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+@router.get(
+    "/names/all",
+    response_model=List[str],
+    summary="Получить все имена",
+    description="Возвращает список всех уникальных значений поля name из базы данных",
+    response_description="Список уникальных имен"
+)
+async def get_all_names(service: RecordsService = Depends(get_service)):
+    try:
+        names = await service.get_all_names()
+        return names
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error")

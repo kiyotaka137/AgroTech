@@ -67,3 +67,8 @@ class RecordsRepository:
                 "data": data_dict,
                 "created_at": r["created_at"].isoformat()
             }
+    async def fetch_all_names(self) -> List[str]:
+        """Возвращает список всех уникальных имен"""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT DISTINCT name FROM records ORDER BY name")
+            return [row["name"] for row in rows]

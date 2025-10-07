@@ -28,3 +28,5 @@ class RecordsService:
         Если не найдено — возвращает None.
         """
         return await self.repo.fetch_one(name)
+    async def get_all_names(self) -> List[str]:
+        return await self.repo.fetch_all_names()

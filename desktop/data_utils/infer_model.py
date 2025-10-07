@@ -108,10 +108,10 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         acids_dict[acid] = logit
 
         set_ensemble(model)
-        #importance = predict_importance(data[0], acid)
-        #importance_dict[acid] = importance
+        importance = predict_importance(data[0], acid)
+        importance_dict[acid] = importance
 
-    #print(importance_dict)
+    print(importance_dict)
     return acids_dict
 
 

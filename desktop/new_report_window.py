@@ -87,10 +87,56 @@ class NewReport(QDialog):
         fields_layout.addSpacing(10)
         fields_layout.addWidget(period_lbl); fields_layout.addWidget(self.period_edit)
         fields_layout.addStretch()
+
+        # Поля ввода (одна строка)
+        fields_layout = QHBoxLayout()
+        name_lbl = QLabel("Имя:");
+        name_lbl.setFixedWidth(40)
+        self.name_edit = QLineEdit(placeholderText="Введите имя");
+        self.name_edit.setFixedWidth(220)
+
+        complex_lbl = QLabel("Комплекс:");
+        complex_lbl.setFixedWidth(80)
+        self.complex_edit = QLineEdit(placeholderText="Введите комплекс");
+        self.complex_edit.setFixedWidth(220)
+
+        period_lbl = QLabel("Дата:");
+        period_lbl.setFixedWidth(60)
+        self.period_edit = QLineEdit(placeholderText="например: 2025-01");
+        self.period_edit.setFixedWidth(160)
+
+        fields_layout.addWidget(name_lbl);
+        fields_layout.addWidget(self.name_edit)
+        fields_layout.addSpacing(10)
+        fields_layout.addWidget(complex_lbl);
+        fields_layout.addWidget(self.complex_edit)
+        fields_layout.addSpacing(10)
+        fields_layout.addWidget(period_lbl);
+        fields_layout.addWidget(self.period_edit)
+
+        # >>> новое: кнопки в той же строке, прижаты вправо
+        fields_layout.addStretch()
+        self.excel_btn = QPushButton("Excel");
+        self.excel_btn.clicked.connect(self.choose_excel_file)
+        self.pdf_btn = QPushButton("PDF");
+        self.pdf_btn.clicked.connect(self.choose_pdf_file)
+
+        # чтобы по высоте совпадало с инпутами
+        btn_h = max(self.name_edit.sizeHint().height(), 28)
+        self.excel_btn.setFixedHeight(btn_h)
+        self.pdf_btn.setFixedHeight(btn_h)
+
+        fields_layout.addSpacing(8)
+        fields_layout.addWidget(self.excel_btn)
+        fields_layout.addWidget(self.pdf_btn)
+
+        # добавляем строку в разметку ТЕПЕРЬ, после кнопок
         main_layout.addLayout(fields_layout)
 
+        #main_layout.addLayout(fields_layout)
+
         # Кнопки Excel
-        files_layout = QHBoxLayout()
+        ''' files_layout = QHBoxLayout()
         files_layout.addStretch()
 
         self.excel_btn = QPushButton("Excel"); self.excel_btn.clicked.connect(self.choose_excel_file)
@@ -100,7 +146,7 @@ class NewReport(QDialog):
         files_layout.addWidget(self.pdf_btn)
 
         files_layout.addStretch()
-        main_layout.addLayout(files_layout)
+        main_layout.addLayout(files_layout) '''
 
         #контейнеры чтобб разделять на левую и правую часть
         left_container = QWidget()
@@ -109,6 +155,7 @@ class NewReport(QDialog):
         right_layout = QVBoxLayout(right_container)
         #таблица сводный анализ(правая)
         self.right_table = QTableWidget(0,2)
+        #self.right_table.setStyleSheet("QTableWidget { border-left: 1px solid #e6e6e6; }")
         self.right_table.setHorizontalHeaderLabels(COLUMNSRIGHT)
         self.right_table.setAlternatingRowColors(True)
         self.right_table.verticalHeader().setVisible(False)
@@ -117,6 +164,7 @@ class NewReport(QDialog):
 
         # Таблица ингридиенты( левая)
         self.left_table = QTableWidget(0, 2)
+        #self.left_table.setStyleSheet("QTableWidget { border-left: 1px solid #e6e6e6; }")
         self.left_table.setHorizontalHeaderLabels(COLUMNSLEFT)
         self.left_table.setAlternatingRowColors(True)
         self.left_table.verticalHeader().setVisible(False)

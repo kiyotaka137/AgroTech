@@ -232,6 +232,7 @@ QTableWidget, QTableView {
     background: #ffffff !important;
     color: #222 !important;
     gridline-color: #e6e6e6 !important;
+
 }
 
 QHeaderView::section {

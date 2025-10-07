@@ -3,10 +3,29 @@ import pandas as pd
 import numpy as np
 import joblib as jl
 import shap
+import re
 
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data
-from training import change_mapping, uniq_ration, uniq_step, uniq_changed_ration, name_mapping
+from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
+
+
+def fix_name(value):
+    pattern = re.compile(r"\d{4}\.\d{2}\.(\d{2})\.?(\d{2})?")
+    match = pattern.search(value)
+    if not match:
+        return None
+
+    groups = match.groups()
+    culture_code = groups[0]
+    culture_name = cultures.get(culture_code)
+
+    if culture_name:
+        return f"{culture_name}"
+    elif culture_name:
+        return culture_name
+    else:
+        return None
 
 
 def extract_to_row(ration, nutrients):
@@ -99,3 +118,8 @@ if __name__ == '__main__':
     #print(load_data_from_json("../reports/Норм_2025-10-07_1759796029.json"))
     print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
                            model_path="models/classic_pipe/acids"))
+    # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
+    #                        model_path="models/classic_pipe"))
+    print(fix_name("5701.01.05.1.23 /19.09.2024"))
+    print(fix_name("5210.03.03.01.1.24 /23.05.2025"))
+    print(fix_name("люцерна 2501.04.08.01.1.24"))

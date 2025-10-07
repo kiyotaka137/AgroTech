@@ -2,8 +2,10 @@ import json
 import pandas as pd
 import numpy as np
 import joblib as jl
+import shap
 import re
 
+from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
 
@@ -74,8 +76,28 @@ def clear_data(data):
     return data.to_numpy()
 
 
+def predict_importance(data, acid, explainer_path="models/classic_pipe/explainers"):
+    feature_names = jl.load(f"{explainer_path}/feature_names.pkl")
+    explainer = jl.load(f"{explainer_path}/{acid}_explainer.pkl")
+
+    X_single = pd.DataFrame([data], columns=feature_names)
+    shap_values = explainer(X_single)
+
+    shap_df = pd.DataFrame({
+        "feature": feature_names,
+        "shap_value": shap_values.values[0]
+    })
+    df = shap_df.sort_values(by="shap_value", key=abs, ascending=False)
+    feature_val_dict = {f: round(v, 2) for f, v in zip(df["feature"], df["shap_value"])}
+
+    #shap.plots.waterfall(shap_values[0])
+
+    return feature_val_dict
+
+
 def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     acids_dict = dict()
+    importance_dict = dict()
 
     data = load_data_from_json(json_report)
     data = clear_data(data)
@@ -85,10 +107,17 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         logit = model.predict(data)
         acids_dict[acid] = logit
 
+        set_ensemble(model)
+        importance = predict_importance(data[0], acid)
+        importance_dict[acid] = importance
+
     return acids_dict
+
 
 if __name__ == '__main__':
     #print(load_data_from_json("../reports/Норм_2025-10-07_1759796029.json"))
+    print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
+                           model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))
     print(fix_name("5701.01.05.1.23 /19.09.2024"))

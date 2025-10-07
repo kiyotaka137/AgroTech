@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLineEdit, QLabel, QListWidget,
     QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
-    QStackedWidget
+    QStackedWidget, QDialog, QMessageBox
 )
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, QFileSystemWatcher
@@ -15,7 +15,6 @@ from PyQt6.QtCore import Qt, QFileSystemWatcher
 from report_loader import ReportLoader
 from new_report_window import NewReport
 from report_list_item import ReportListItem
-from new_report_window import NewReport
 
 
 class MainWindow(QWidget):
@@ -37,8 +36,14 @@ class MainWindow(QWidget):
 
         # ===== Сайдбар =====
         sidebar_layout = QVBoxLayout()
-        sidebar_layout.setContentsMargins(0, 5, 0, 0)
-        sidebar_layout.setSpacing(5)
+        sidebar_layout.setContentsMargins(5, 40, 0, 0)
+        sidebar_layout.setSpacing(10)
+
+        self.btn_add_sidebar = QPushButton()
+        self.btn_add_sidebar.setIcon(QIcon("desktop/icons/add_report.png"))
+        self.btn_add_sidebar.setIconSize(QtCore.QSize(26, 26))
+        self.btn_add_sidebar.setFixedSize(32, 32)
+        self.btn_add_sidebar.clicked.connect(self.create_new_report)
 
         self.btn_load_reports = QPushButton()
         self.btn_load_reports.setIcon(QIcon("desktop/icons/history.png"))
@@ -46,14 +51,21 @@ class MainWindow(QWidget):
         self.btn_load_reports.setFixedSize(32, 32)
         self.btn_load_reports.clicked.connect(self.load_reports_to_list)
 
+        self.btn_admin_keys = QPushButton()
+        self.btn_admin_keys.setIcon(QIcon("desktop/icons/admin_keys.png"))
+        self.btn_admin_keys.setIconSize(QtCore.QSize(26, 26))
+        self.btn_admin_keys.setFixedSize(32, 32)
+        self.btn_admin_keys.clicked.connect(self.show_access_key_dialog)
+
+        sidebar_layout.addWidget(self.btn_add_sidebar)
         sidebar_layout.addWidget(self.btn_load_reports)
+        sidebar_layout.addWidget(self.btn_admin_keys)
         sidebar_layout.addStretch()
 
         sidebar_widget = QWidget()
         sidebar_widget.setLayout(sidebar_layout)
-        sidebar_widget.setFixedWidth(32)
+        sidebar_widget.setFixedWidth(40)
         sidebar_widget.setObjectName("sidebar")
-
         # ===== Средний бар (История) =====
         history_layout = QVBoxLayout()
         history_layout.setContentsMargins(0, 0, 0, 0)
@@ -98,15 +110,6 @@ class MainWindow(QWidget):
         # Список
         self.history_list = QListWidget()
         self.history_list.setObjectName("historyList")
-        self.history_list.setStyleSheet("""
-        QListWidget#historyList {
-            background-color: #000;
-            border: none;
-        }
-        QListWidget#historyList::item:selected {
-            background-color: #2b2b2b;
-        }
-        """)
         self.history_list.itemClicked.connect(self.display_report)
         
         # Компоновка
@@ -363,6 +366,65 @@ class MainWindow(QWidget):
         Обновляем список с небольшим debounce.
         """
         QtCore.QTimer.singleShot(100, self.refresh_reports_list)
+    
+
+    def show_access_key_dialog(self):
+        """Открывает окно для ввода ключа доступа и проверяет его"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Проверка доступа")
+        dialog.setModal(True)
+        dialog.setFixedSize(300, 150)
+
+        layout = QVBoxLayout(dialog)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        label = QLabel("Введите ключ доступа:")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        key_input = QLineEdit()
+        key_input.setPlaceholderText("Ваш ключ...")
+        key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        key_input.setFixedWidth(220)
+
+        error_label = QLabel("")
+        error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        confirm_btn = QPushButton("Подтвердить")
+
+        layout.addWidget(label)
+        layout.addWidget(key_input)
+        layout.addWidget(error_label)
+        layout.addWidget(confirm_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # ===== Логика проверки =====
+        def check_key():
+            entered = key_input.text().strip()
+            correct_key = "1234"  # <-- здесь можешь заменить на свой ключ
+            if entered == correct_key:
+                dialog.accept()
+                QMessageBox.information(self, "Успех", "Доступ разрешён ✅")
+            else:
+                # Выделяем ошибку визуально
+                key_input.setStyleSheet("""
+                    QLineEdit {
+                        border: 1px solid #d32f2f;
+                        background-color: #ffeaea;
+                        border-radius: 4px;
+                        padding: 4px;
+                    }
+                """)
+                error_label.setText("Неверный ключ доступа")
+
+        confirm_btn.clicked.connect(check_key)
+
+        # Сбрасываем подсветку при новом вводе
+        def reset_error():
+            key_input.setStyleSheet("")
+            error_label.setText("")
+
+        key_input.textChanged.connect(reset_error)
+
+        dialog.exec()
 
 
 if __name__ == "__main__":

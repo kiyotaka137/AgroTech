@@ -9,10 +9,14 @@ from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSearchCV
 from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import train_test_split, cross_val_score, LeaveOneOut, KFold
+
 from training.train_pipelines.ohe_lin import get_ohe_train_test_data, get_ohe_step_data
 import joblib
-import shap
 
+import numba
+numba.config.DISABLE_JIT = True
+
+import shap
 
 def get_data():
     dataset_all = get_ohe_step_data()
@@ -114,20 +118,33 @@ def main():
     print(f"R²   (по тестовой выборке): {r2_test:.4f}")
 
     # === Сохраняем модель ===
-    joblib.dump(ensemble, '../../models/classic_pipe/acids/ensemble.pkl')
+    #joblib.dump(ensemble, '../../models/classic_pipe/acids/ensemble.pkl')
 
 
     # === Смотрим что влияет ===
-    # feature_names = dataset.drop("target", axis=1).columns.tolist()
-    # sample_idx = 0
-    # x_single = X_test[sample_idx:sample_idx + 1]
+
+    from desktop.data_utils.predictor import set_ensemble, ensemble_predict
+    set_ensemble(ensemble)
+    feature_names = dataset.drop("target", axis=1).columns.tolist()
+    sample_idx = 0
+    X_single = X_test[sample_idx:sample_idx + 1]
     #
     # explainer = shap.Explainer(ensemble.predict, X, feature_names=feature_names)
     # shap_values_single = explainer(x_single)
-
-    #shap.plots.waterfall(shap_values_single[0], max_display=len(dataset.columns))
+    #
+    # print(shap_values_single)
+    #
+    # shap.plots.waterfall(shap_values_single[0], max_display=len(dataset.columns))
     # shap.summary_plot(shap_values_single, x_single, feature_names=feature_names)
+    #joblib.dump(feature_names, "../../models/classic_pipe/feature_names.pkl")
 
+    explainer = shap.Explainer(
+        ensemble_predict,
+        masker=X,
+        feature_names=feature_names
+    )
+
+    joblib.dump(explainer, "../../models/classic_pipe/acid_explainers/Стеариновая_explainer.pkl")
 
 def gridsearch():
     # Best
@@ -348,11 +365,28 @@ def predict_nutr():
         print(f"RMSE (по тестовой выборке): {rmse_test:.4f}")
         print(f"R²   (по тестовой выборке): {r2_test:.4f}")
 
-        joblib.dump(pipe_cat, f'../../models/classic_pipe/nutri/{ind}_catboost.pkl')
+        #joblib.dump(pipe_cat, f'../../models/classic_pipe/nutri/{ind}_catboost.pkl')
+
+        from desktop.data_utils.predictor import set_ensemble, ensemble_predict
+        set_ensemble(model)
+        feature_names = dataset.drop(uniq_step + ["target"], axis=1).columns.tolist()
+        sample_idx = 0
+        X_single = X_test[sample_idx:sample_idx + 1]
+
+        explainer = shap.Explainer(
+            ensemble_predict,
+            masker=X,
+            feature_names=feature_names
+        )
+
+        shap_val = explainer(X_single)
+        shap.plots.waterfall(shap_val[0])
+
+        joblib.dump(pipe_cat, f'../../models/classic_pipe/nutri_explainers/{ind}_explainers.pkl')
 
 
 if __name__ == "__main__":
-    #main()
+    main()
     #gridsearch()
     #params_for_ensamble()
-    predict_nutr()
+    #predict_nutr()

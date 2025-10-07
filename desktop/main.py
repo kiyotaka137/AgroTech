@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, QFileSystemWatcher
 
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
-from .new_report_window import NewReport
+from .new_report_window import NewReport, RefactorReport
 
 
 class MainWindow(QWidget):
@@ -124,7 +124,7 @@ class MainWindow(QWidget):
 
         # --- Вкладка Рацион ---
         # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
-        self.tab_ration_widget = NewReport()
+        self.tab_ration_widget = RefactorReport()
         self.tab_ration_debug = QTextEdit()
         self.tab_ration_debug.setReadOnly(True)
 
@@ -292,8 +292,8 @@ class MainWindow(QWidget):
             return
 
         report_file = item.data(Qt.ItemDataRole.UserRole)
-        print(report_file)
-        #print(report_file)#путь находится правильно
+
+        #print(report_file )# путь находится правильно
         #снизу в комменте какой то бред
         '''
         if not report_file:
@@ -316,10 +316,12 @@ class MainWindow(QWidget):
         nutrient_array = report_data.get("nutrients_rows", None)
 
         #print("массив с рационом",ration_array) #работает
+        self.tab_ration_widget.get_json_path(report_file)
         self.tab_ration_widget.load_from_json(ration_array,"left")
         self.tab_ration_widget.load_from_json(nutrient_array,"right")
 
         self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
+
         '''
         shown = False
 

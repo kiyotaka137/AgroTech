@@ -9,10 +9,10 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QLineEdit, QLabel, QAbstractItemView, QComboBox, QFileDialog,
-    QHeaderView, QSizePolicy, QProgressBar,QSplitter,
+    QHeaderView, QSizePolicy, QProgressBar,QSplitter
 )
 from PyQt6.QtGui import QFont, QMovie
-from PyQt6.QtCore import (Qt, QTimer, QSize)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
 
@@ -22,6 +22,9 @@ COLUMNSRIGHT=["Нутриент","СВ"]
 
 
 class NewReport(QDialog):
+
+    analysis_started = pyqtSignal(dict)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Прогноз молока по рациону коров")
@@ -462,7 +465,7 @@ class NewReport(QDialog):
         self._loading_dialog = loading
 
         # 5 секунд "пустой" работы — placeholder
-        QTimer.singleShot(5000, lambda: self._finish_analysis())
+        #QTimer.singleShot(5000, lambda: self._finish_analysis())
 
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""

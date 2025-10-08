@@ -1239,7 +1239,7 @@ class AdminNewReport(NewReport):
             "btn_add_row_left", "btn_remove_row_left",
             "analyze_btn"
         ]
-
+        self._disable_table_editing()
         # Скрываем кнопки, если они существуют
         for name in btn_names:
             w = getattr(self, name, None)
@@ -1330,6 +1330,11 @@ class AdminNewReport(NewReport):
             pass
 
         QTimer.singleShot(0,self._remove_name_complex_date_fields)
+    def _disable_table_editing(self):
+        """Запрещает редактирование всех ячеек в таблицах"""
+        # Устанавливаем политику редактирования для таблиц
+        self.left_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.right_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
     def _remove_name_complex_date_fields(self):
             """Безопасно удаляет QLabel и QLineEdit 'Имя', 'Комплекс', 'Дата'."""
             try:

@@ -20,7 +20,6 @@ from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import NewReport, RefactorReport
 from .report import create_md_webview, write_report_files
-
 from .window_manager import window_manager
 from .api_client import APIClient
 

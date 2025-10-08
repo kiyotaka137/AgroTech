@@ -245,8 +245,8 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
 
 
 if __name__ == '__main__':
-    print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
-    #print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
-    #                       model_path="models/classic_pipe/acids"))
+    #print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
+    print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
+                           model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

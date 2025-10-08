@@ -136,7 +136,6 @@ class MainWindow(QWidget):
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         self.tabs = tabs  # сохранить ссылку на TabWidget
-        tabs.tabBar().setDrawBase(False)  # ← убирает базовую линию под вкладками
 
         # --- Вкладка Рацион ---
         # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)

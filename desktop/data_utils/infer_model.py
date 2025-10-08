@@ -3,10 +3,15 @@ import pandas as pd
 import numpy as np
 import joblib as jl
 import shap
+import os
 import re
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
+#from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
-from .config import acids, for_dropping, medians_of_data, main_acids, nutri, uniq_step
+from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
 
 
@@ -28,7 +33,7 @@ def fix_name(value):
         return None
 
 
-def extract_to_row(ration, nutrients):
+def extract_to_row(ration, nutrients, json_path):
     row = [0] * (len(uniq_changed_ration) + len(uniq_step))
     columns = uniq_changed_ration + uniq_step
 
@@ -36,10 +41,39 @@ def extract_to_row(ration, nutrients):
     uniq_step_dict = {elem: ind + len(uniq_changed_ration) for ind, elem in enumerate(uniq_step)}
 
     name_mapping = change_mapping()
+    llm_elems = {}
+    new_ration = []
 
     for i, (elem, val) in enumerate(ration):
-        clear_elem = name_mapping[elem]  # todo: сделать вилку с ллм
-        row[uniq_dict[clear_elem]] += float(val.replace(",", "."))
+        if elem in name_mapping:
+            clear_elem = name_mapping[elem]
+        else:
+            clear_elem = fix_name(elem)
+            if clear_elem is None:
+                llm_elems[elem] = i
+
+        new_ration.append((clear_elem, val))
+
+    # if llm_elems:
+    #     cleans = llm_cleaning(list(llm_elems.values))
+    #     for k, v in cleans.items():
+    #         new_ration[llm_elems[k]][0] = v
+
+    new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # добавляем поле Normalized в каждый элемент ration_rows
+    for json_row in data.get("ration_rows", []):
+        json_row["Normalized"] = new_ration_dct[json_row.get("Ингредиенты", "")]
+
+    # сохраняем обратно
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    for elem, val in new_ration:
+        row[uniq_dict[elem]] += float(val.replace(",", "."))
 
     for i, (elem, val) in enumerate(nutrients):
 
@@ -61,7 +95,7 @@ def load_data_from_json(path_name: str):
     rational_rows = [(elem["Ингредиенты"], elem["%СВ"]) for elem in json_file['ration_rows']]
     nutrients_rows = [(elem["Нутриент"], elem["СВ"]) for elem in json_file['nutrients_rows']]
 
-    final_row = extract_to_row(rational_rows, nutrients_rows)
+    final_row = extract_to_row(rational_rows, nutrients_rows, path_name)
     return final_row
 
 
@@ -76,7 +110,9 @@ def clear_data(data):
     return data
 
 
-def predict_importance_acids(data, acid, explainer_path="models/classic_pipe/acid_explainers"):
+def predict_importance_acids(data, acid, name,
+                             explainer_path="models/classic_pipe/acid_explainers",
+                             graphics_path="desktop/graphics"):
     feature_names = jl.load(f"{explainer_path}/feature_names.pkl")
     explainer = jl.load(f"{explainer_path}/{acid}_explainer.pkl")
 
@@ -90,24 +126,49 @@ def predict_importance_acids(data, acid, explainer_path="models/classic_pipe/aci
     df = shap_df.sort_values(by="shap_value", key=abs, ascending=False)
     feature_val_dict = {f: round(v, 2) for f, v in zip(df["feature"], df["shap_value"])}
 
-    #shap.plots.waterfall(shap_values[0])
+    amount_of_pos = 0
+    amount_of_neg = 0
+    time_copy = feature_val_dict.copy()
+
+    for key1, item1 in time_copy.items():
+        if item1 >= 0:
+            if amount_of_pos >= 3:
+                del feature_val_dict[key1]
+            else:
+                amount_of_pos += 1
+        else:
+            if amount_of_neg >= 3:
+                del feature_val_dict[key1]
+            else:
+                amount_of_neg += 1
+
+    output_dir = name.split('/')[-1][:-5]
+    if not os.path.exists(f"{graphics_path}/{output_dir}"):
+        os.makedirs(f"{graphics_path}/{output_dir}")
+
+    shap.plots.waterfall(shap_values[0])
+    plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
     return feature_val_dict
 
 
-def predict_importance_nutri(data, nutri_path="models/classic_pipe/nutri", importance_path="models/classic_pipe/nutri_explainers"):
+def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
+                             importance_path="models/classic_pipe/nutri_explainers",
+                             graphics_path="desktop/graphics"):
     nutri_dict = dict()
     feature_names = jl.load(f"{importance_path}/feature_names.pkl")
-    print(feature_names)
 
-    data = data.drop(uniq_step, axis=1).to_numpy()
+    data = data.drop(nutri_for_predict, axis=1).to_numpy()
 
     for key, item in nutri.items():
-        model = jl.load(f"{nutri_path}/{item}_catboost.pkl")
+        model = jl.load(f"{nutri_path}/{key}_catboost.pkl")
+        set_ensemble(model)
         logit = model.predict(data)
 
-        explainer = jl.load(f"{importance_path}/{item}_explainer.pkl")
-        X_single = pd.DataFrame([logit], columns=feature_names)
+        explainer = jl.load(f"{importance_path}/{key}_explainers.pkl")
+        X_single = pd.DataFrame(data, columns=feature_names)
+
         shap_values = explainer(X_single)
 
         shap_df = pd.DataFrame({
@@ -116,9 +177,35 @@ def predict_importance_nutri(data, nutri_path="models/classic_pipe/nutri", impor
         })
         df = shap_df.sort_values(by="shap_value", key=abs, ascending=False)
         feature_val_dict = {f: round(v, 2) for f, v in zip(df["feature"], df["shap_value"])}
-        print(feature_val_dict)
+
+        amount_of_pos = 0
+        amount_of_neg = 0
+        time_copy = feature_val_dict.copy()
+
+        for key1, item1 in time_copy.items():
+            if item1 >= 0:
+                if amount_of_pos >= 3:
+                    del feature_val_dict[key1]
+                else:
+                    amount_of_pos += 1
+            else:
+                if amount_of_neg >= 3:
+                    del feature_val_dict[key1]
+                else:
+                    amount_of_neg += 1
+
+        nutri_dict[item] = feature_val_dict
+
+        output_dir = name.split('/')[-1][:-5]
+        if not os.path.exists(f"{graphics_path}/{output_dir}"):
+            os.makedirs(f"{graphics_path}/{output_dir}")
+
+        shap.plots.waterfall(shap_values[0])
+        plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
+        plt.close()
 
     return nutri_dict
+
 
 def cross_importance(importance_dict):
     for key, item in importance_dict.items():
@@ -138,7 +225,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     data = load_data_from_json(json_report)
     data = clear_data(data)
 
-    #importance_nutri_dict = predict_importance_nutri(data)
+    importance_nutri_dict = predict_importance_nutri(data, json_report)
 
     data = data.to_numpy()
 
@@ -148,16 +235,18 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         acids_dict[acid] = logit
 
         set_ensemble(model)
-        importance = predict_importance_acids(data[0], acid)
+        importance = predict_importance_acids(data[0], acid, json_report)
         importance_acid_dict[acid] = importance
 
-    #print(importance_dict)
+    #print(importance_nutri_dict)
+    #print(importance_acid_dict)
+
     return acids_dict
 
 
 if __name__ == '__main__':
-    #print(load_data_from_json("../reports/Норм_2025-10-07_1759796029.json"))
-    print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
-                           model_path="models/classic_pipe/acids"))
+    print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
+    #print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
+    #                       model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

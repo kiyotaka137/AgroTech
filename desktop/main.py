@@ -346,30 +346,17 @@ class MainWindow(QWidget):
 
         report_file = item.data(Qt.ItemDataRole.UserRole)
 
-        #print(report_file )# путь находится правильно
-        #снизу в комменте какой то бред
-        '''
-        if not report_file:
-            # fallback: пробуем получить текст из виджета
-            widget = self.history_list.itemWidget(item)
-            if widget is None:
-                return
-            try:
-                lbl_name = widget.layout().itemAt(0).widget()
-                report_name = lbl_name.text()
-                report_file = str(self.reports_dir / f"{report_name}.json")
-            except Exception:
-                return
-        '''
         # Попытка загрузить сначала по полному пути, затем по basename(зачем это надо)
         report_data = self.report_loader.load_report(report_file)
         #print(report_data)
 
+        meta = report_data.get("meta", None)
         ration_array = report_data.get("ration_rows", None)
         nutrient_array = report_data.get("nutrients_rows", None)
 
         #print("массив с рационом",ration_array) # работает
         self.tab_ration_widget.get_json_path(report_file)
+        self.tab_ration_widget.load_from_json(meta, "meta")
         self.tab_ration_widget.load_from_json(ration_array,"left")
         self.tab_ration_widget.load_from_json(nutrient_array,"right")
 

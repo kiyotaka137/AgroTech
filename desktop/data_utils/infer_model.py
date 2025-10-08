@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
-from .llm_infer import llm_cleaning
+#from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
@@ -58,10 +58,10 @@ def extract_to_row(ration, nutrients, json_path):
 
         new_ration.append((clear_elem, val))
 
-    if llm_elems:
-        cleans = llm_cleaning(list([llm_elems.values]))
-        for k, v in cleans.items():
-            new_ration[llm_elems[k]][0] = v
+    # if llm_elems:
+    #     cleans = llm_cleaning(list([llm_elems.values]))
+    #     for k, v in cleans.items():
+    #         new_ration[llm_elems[k]][0] = v
 
     new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
 

@@ -111,11 +111,9 @@ def parse_step_table_excel(sheet, start_row: int, max_search_rows: int = 1000) -
                     try:
                         step_table[name_cell] = float(val_cell)
                     except:
-                        # Пропускаем некорректные значения
                         pass
                 r += 1
         else:
-            # Если нет заголовка блока — просто идем дальше
             r += 1
 
     return step_table

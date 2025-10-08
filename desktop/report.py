@@ -566,8 +566,127 @@ def create_md_webview(
     lay.addWidget(viewer)
     target.setProperty("_md_view", viewer)
     return viewer
+def create_md_webview_for_Admin(
+    target: Union[Textish, QWidget],
+    md_text: str,
+    *,
+    base_dir: Union[str, Path] = None,
+    graphics_dir: Union[str, Path] = None,
+    engine: str = "webengine",
+    css: Optional[str] = None,
+) -> QWidget:
+    """
+    Создает или обновляет веб-просмотрщик для отображения Markdown текста БЕЗ изображений
+    и без раздела "Важность рациона для жирных кислот (графики)".
+    
+    Args:
+        target: Целевой виджет или контейнер
+        md_text: Готовый текст в формате Markdown
+        base_dir: Базовая директория для ресурсов (по умолчанию - текущая)
+        graphics_dir: Директория с изображениями (по умолчанию - base_dir/graphics)
+        engine: Движок для отображения ('webengine' или 'textbrowser')
+        css: CSS стили для кастомизации
+    """
+    # Устанавливаем базовые директории
+    if base_dir is None:
+        base_dir = Path.cwd()
+    base_dir = Path(base_dir).resolve()
+    base_url = QUrl.fromLocalFile(str(base_dir) + "/")
+    
+    # Вычисляем директорию с графикой
+    if graphics_dir is None:
+        graphics_dir = base_dir / "graphics"
+    else:
+        graphics_dir = Path(graphics_dir).resolve()
+
+    # 1) Удаляем раздел с графиками жирных кислот
+    md_text_without_graphics_section = _remove_fatty_acids_graphics_section(md_text)
+
+    # 2) Удаляем изображения из оставшегося Markdown текста
+    md_text_cleaned = _remove_images_from_markdown(md_text_without_graphics_section)
+
+    # 3) конвертируем MD -> HTML
+    body_html = _convert_md_to_html(md_text_cleaned)
+    html = _wrap_html(body_html, css)
+
+    # 4) отрисовка в заданный виджет
+    if isinstance(target, (QTextEdit, QTextBrowser)):
+        if isinstance(target, QTextBrowser):
+            target.setOpenExternalLinks(True)
+        target.document().setBaseUrl(base_url)
+        target.setHtml(html)
+        return target
+
+    lay = _ensure_layout(target)
+    viewer = target.property("_md_view")
+    if viewer is not None:
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+            if isinstance(viewer, QWebEngineView):
+                viewer.setHtml(html, baseUrl=base_url)
+                return viewer
+        except Exception:
+            pass
+        if isinstance(viewer, QTextBrowser):
+            viewer.document().setBaseUrl(base_url)
+            viewer.setHtml(html)
+            return viewer
+
+    if engine in ("auto", "webengine"):
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+            viewer = QWebEngineView()
+            viewer.setHtml(html, baseUrl=base_url)
+            lay.addWidget(viewer)
+            target.setProperty("_md_view", viewer)
+            return viewer
+        except Exception:
+            pass
+
+    viewer = QTextBrowser()
+    viewer.setOpenExternalLinks(True)
+    viewer.document().setBaseUrl(base_url)
+    viewer.setHtml(html)
+    lay.addWidget(viewer)
+    target.setProperty("_md_view", viewer)
+    return viewer
 
 
+def _remove_fatty_acids_graphics_section(md_text: str) -> str:
+    """
+    Удаляет раздел "Важность рациона для жирных кислот (графики)" и все подразделы с кислотами.
+    """
+    import re
+    
+    # Удаляем весь раздел от "## Важность рациона для жирных кислот (графики)" 
+    # до следующего заголовка "##" или конца текста
+    pattern = r'## Важность рациона для жирных кислот \(графики\).*?(?=##|\Z)'
+    md_text = re.sub(pattern, '', md_text, flags=re.DOTALL)
+    
+    return md_text
+
+
+def _remove_images_from_markdown(md_text: str) -> str:
+    """
+    Удаляет все изображения из Markdown текста.
+    
+    Удаляет:
+    - ![alt](src) - стандартный синтаксис
+    - <img> теги - HTML синтаксис
+    - ссылки на изображения в тексте
+    """
+    import re
+    
+    # Удаляем стандартный Markdown синтаксис изображений: ![alt](src)
+    md_text = re.sub(r'!\[.*?\]\(.*?\)', '', md_text)
+    
+    # Удаляем HTML теги <img>
+    md_text = re.sub(r'<img[^>]*>', '', md_text, flags=re.IGNORECASE)
+    
+    # Удаляем расширенные HTML теги <image> (редко используется)
+    md_text = re.sub(r'<image[^>]*>', '', md_text, flags=re.IGNORECASE)
+    
+    return md_text
 
 if __name__ == "__main__":
     write_report_files(

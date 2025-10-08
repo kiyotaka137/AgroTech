@@ -14,13 +14,14 @@ from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
     QEasingCurve, QThread, pyqtSignal, QObject, QTimer
 )
+
+from .report import create_md_webview, write_report_files,create_md_webview_for_Admin
 import json
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import AdminNewReport
 from .api_client import APIClient
 from .window_manager import window_manager
-
 class AdminMainWindow(QWidget):
 
     return_to_main_requested = pyqtSignal()
@@ -306,10 +307,11 @@ class AdminMainWindow(QWidget):
         
         # Загружаем данные из базы через клиент
         report_data = self.client.get_record_by_name(record_name)
-        
-        if not report_data:
-            print(f"Данные для записи '{record_name}' не найдены")
-            return
+        record = self.client.get_record_by_name(record_name)
+        if record and 'data' in record:
+            report_data = record['data']  # Берем только содержимое поля data
+        else:
+            report_data = None
 
         # Извлекаем массивы данных
         ration_array = report_data.get("ration_rows", None)
@@ -319,12 +321,12 @@ class AdminMainWindow(QWidget):
         # Загружаем данные в виджеты
         self.tab_ration_widget.load_from_json(ration_array, "left")
         self.tab_ration_widget.load_from_json(nutrient_array, "right")
-        self.tab_ration_widget.make_tables_readonly()
+       
         # Показываем виджет-рацион
         self.ration_stack.setCurrentIndex(0)
 
         # Отображаем текстовый отчет
-        self.tab_report.setPlainText(report_text or "")
+        create_md_webview_for_Admin(self.tab_report,report_text)
         '''
         """
         Загружает и отображает отчёт. Берём реальный путь файла из UserRole.
@@ -404,62 +406,8 @@ class AdminMainWindow(QWidget):
     '''
 
     def show_access_key_dialog(self):
-        """Открывает окно для ввода ключа доступа и проверяет его"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Проверка доступа")
-        dialog.setModal(True)
-        dialog.setFixedSize(300, 150)
-
-        layout = QVBoxLayout(dialog)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        label = QLabel("Введите ключ доступа:")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        key_input = QLineEdit()
-        key_input.setPlaceholderText("Ваш ключ...")
-        key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        key_input.setFixedWidth(220)
-
-        error_label = QLabel("")
-        error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        confirm_btn = QPushButton("Подтвердить")
-
-        layout.addWidget(label)
-        layout.addWidget(key_input)
-        layout.addWidget(error_label)
-        layout.addWidget(confirm_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # ===== Логика проверки =====
-        def check_key():
-            entered = key_input.text().strip()
-            correct_key = "1234"  # <-- здесь можешь заменить на свой ключ
-            if entered == correct_key:
-                dialog.accept()
-                QMessageBox.information(self, "Успех", "Доступ разрешён ✅")
-            else:
-                # Выделяем ошибку визуально
-                key_input.setStyleSheet("""
-                    QLineEdit {
-                        border: 1px solid #d32f2f;
-                        background-color: #ffeaea;
-                        border-radius: 4px;
-                        padding: 4px;
-                    }
-                """)
-                error_label.setText("Неверный ключ доступа")
-
-        confirm_btn.clicked.connect(check_key)
-
-        # Сбрасываем подсветку при новом вводе
-        def reset_error():
-            key_input.setStyleSheet("")
-            error_label.setText("")
-
-        key_input.textChanged.connect(reset_error)
-
-        dialog.exec()
+        """Минимальное уведомление о режиме администратора"""
+        QMessageBox.information(self, " ", "Вы уже в  режиме администратора")
 
     # def show_analysis_tab(self):
     #     # Скрываем старые вкладки

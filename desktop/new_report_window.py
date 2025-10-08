@@ -1118,22 +1118,6 @@ class RefactorReport(NewReport):
         super().__init__(parent)
         self.json_path = None
 
-    def analyze_clicked(self):
-        self.analysis_started.emit()
-        self.analyze_btn.setEnabled(False)
-
-        self.worker.moveToThread(self.thread)
-
-        # Подключаем сигналы
-        self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.error.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
-
-        # Запускаем
-        self.thread.start()
-
 
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""

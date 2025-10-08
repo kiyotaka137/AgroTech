@@ -212,9 +212,11 @@ def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
         nutri_dict[item] = feature_val_dict
 
         output_dir = name.split('/')[-1][:-5]
+        print(output_dir, name)
         if not os.path.exists(f"{graphics_path}/{output_dir}"):
             os.makedirs(f"{graphics_path}/{output_dir}")
 
+        print(f"{graphics_path}/{output_dir}/{key}.png")
         shap.plots.waterfall(shap_values[0])
         plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
         plt.close()

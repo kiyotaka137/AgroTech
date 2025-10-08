@@ -69,6 +69,7 @@ class MainWindow(QWidget):
         sidebar_widget.setLayout(sidebar_layout)
         sidebar_widget.setFixedWidth(40)
         sidebar_widget.setObjectName("sidebar")
+
         # ===== Средний бар (История) =====
         history_layout = QVBoxLayout()
         history_layout.setContentsMargins(0, 0, 0, 0)
@@ -158,36 +159,14 @@ class MainWindow(QWidget):
         report_widget = QWidget()
         report_widget.setLayout(report_layout)
 
-        # # ===== Вкладка анализа =====
-        # self.tab_analysis = QWidget()
-        # analysis_layout = QVBoxLayout(self.tab_analysis)
-        # analysis_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # # GIF
-        # self.gif_label = QLabel()
-        # self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.movie = QMovie("desktop/icons/loading_trans.gif")
-        # self.gif_label.setMovie(self.movie)
-
-        # # Надписи
-        # self.phrase_label = QLabel("Анализ таблицы моделью...")
-        # self.phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # analysis_layout.addWidget(self.gif_label)
-        # analysis_layout.addWidget(self.phrase_label)
-
-        # # Добавляем вкладку в QTabWidget, но изначально выключаем
-        # self.tabs.addTab(self.tab_analysis, "Анализ")
-        # self.analysis_index = self.tabs.indexOf(self.tab_analysis)
-        # self.tabs.setTabEnabled(self.analysis_index, False)
-
         # ===== Сплиттер =====
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.history_widget)
         splitter.addWidget(report_widget)
         splitter.setHandleWidth(0)
         splitter.setChildrenCollapsible(False)
-        #splitter.setSizes([280, 1060])
+        
+        splitter.setSizes([280, 1060])
 
         # ===== Главный layout =====
         main_layout = QHBoxLayout(self)
@@ -207,7 +186,7 @@ class MainWindow(QWidget):
             return
 
         start_width = self.history_widget.width()
-        end_width = 0 if self.history_widget.isVisible() else 230
+        end_width = 0 if self.history_widget.isVisible() else 260
 
         # Если будем показывать — убедимся, что виджет отображается
         if not self.history_widget.isVisible():
@@ -224,7 +203,7 @@ class MainWindow(QWidget):
         def on_finished():
             if end_width == 0:
                 self.history_widget.hide()
-                self.history_widget.setMaximumWidth(230)  # вернуть ограничение
+                self.history_widget.setMaximumWidth(260)  # вернуть ограничение
 
         self.anim.finished.connect(on_finished)
         self.anim.start()

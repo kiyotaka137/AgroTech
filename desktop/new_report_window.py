@@ -138,24 +138,24 @@ class NewReport(QDialog):
         name_lbl = QLabel("Имя:");
         name_lbl.setFixedWidth(40)
         self.name_edit = QLineEdit(placeholderText="Введите имя");
-        self.name_edit.setFixedWidth(220)
+        self.name_edit.setFixedWidth(160)
 
         complex_lbl = QLabel("Комплекс:");
         complex_lbl.setFixedWidth(80)
         self.complex_edit = QLineEdit(placeholderText="Введите комплекс");
-        self.complex_edit.setFixedWidth(220)
+        self.complex_edit.setFixedWidth(160)
 
         period_lbl = QLabel("Дата:");
         period_lbl.setFixedWidth(60)
         self.period_edit = QLineEdit(placeholderText="например: 2025-01");
-        self.period_edit.setFixedWidth(160)
+        self.period_edit.setFixedWidth(120)
 
         fields_layout.addWidget(name_lbl);
         fields_layout.addWidget(self.name_edit)
-        fields_layout.addSpacing(10)
+        fields_layout.addSpacing(8)
         fields_layout.addWidget(complex_lbl);
         fields_layout.addWidget(self.complex_edit)
-        fields_layout.addSpacing(10)
+        fields_layout.addSpacing(8)
         fields_layout.addWidget(period_lbl);
         fields_layout.addWidget(self.period_edit)
 
@@ -177,18 +177,15 @@ class NewReport(QDialog):
         for b in (self.excel_btn, self.pdf_btn):
             b.setProperty("pill", True)  # тот же селектор, что для нижних
             b.setFont(head_font)
-            b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
-            b.setMinimumWidth(92)  # чтобы не схлопывались
+            #b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
+            #b.setMinimumWidth(92)  # чтобы не схлопывались
             b.setCursor(Qt.CursorShape.PointingHandCursor)
 
             sh = QGraphicsDropShadowEffect(self)
-            sh.setBlurRadius(18)
+            sh.setBlurRadius(4)
             sh.setOffset(0, 2)
             sh.setColor(QColor(0, 0, 0, 40))
             b.setGraphicsEffect(sh)
-
-        self.excel_btn.setMinimumWidth(72)  # ← ДОБАВЬ: чтобы кнопки не «схлопывались»
-        self.pdf_btn.setMinimumWidth(72)  # ← ДОБАВЬ
 
         fields_layout.addSpacing(8)
         fields_layout.addWidget(self.excel_btn)
@@ -196,8 +193,6 @@ class NewReport(QDialog):
 
         # добавляем строку в разметку ТЕПЕРЬ, после кнопок
         main_layout.addLayout(fields_layout)
-
-        #main_layout.addLayout(fields_layout)
 
         # Кнопки Excel
         ''' files_layout = QHBoxLayout()
@@ -217,7 +212,7 @@ class NewReport(QDialog):
         left_layout = QVBoxLayout(left_container)
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
-
+        
         for _pane in (left_container, right_container):
             _pane.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
@@ -310,20 +305,53 @@ class NewReport(QDialog):
 
 
         #сплитер для разделения таблиц
-        splitter=QSplitter(Qt.Orientation.Horizontal)
-        left_layout.addWidget(self.left_table)
-        right_layout.addWidget(self.right_table)
-        #left_layout.addLayout(left_buttons_layout)
-        splitter.addWidget(left_container)
-        splitter.addWidget(right_container)
+        # splitter=QSplitter(Qt.Orientation.Horizontal)
+        # left_layout.addWidget(self.left_table)
+        # right_layout.addWidget(self.right_table)
+        
+        # #left_layout.addLayout(left_buttons_layout)
+        # splitter.addWidget(left_container)
+        # splitter.addWidget(right_container)
 
-        # установка соотношения таблиц
-        splitter.setStretchFactor(0, 6)
-        splitter.setStretchFactor(1, 6)
-        main_layout.addWidget(splitter,1)
+        # splitter.setHandleWidth(0)           # ручка исчезнет визуально
+        # splitter.setChildrenCollapsible(False)  # запрещает "сплющивание" таблиц
+         
+
+        # # установка соотношения таблиц
+        # splitter.setStretchFactor(0, 6)
+        # splitter.setStretchFactor(1, 6)
+        # main_layout.addWidget(splitter,1)
 
         # гарантируем, что верх — сплиттер растягивается, низ — фикс
-        splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        #splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Контейнер для таблиц
+        tables_container = QWidget()
+        tables_layout = QHBoxLayout(tables_container)
+        tables_layout.setContentsMargins(0, 0, 0, 0)
+        tables_layout.setSpacing(16)  # расстояние между таблицами
+
+        #Блокируем горизонтальную промотку
+        self.left_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.left_table.horizontalScrollBar().setDisabled(True)
+
+        self.right_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.right_table.horizontalScrollBar().setDisabled(True)
+
+        # Добавляем таблицы
+        tables_layout.addWidget(self.left_table)
+        tables_layout.addWidget(self.right_table)
+
+        # Определяем растяжение, чтобы обе таблицы занимали равные части
+        tables_layout.setStretch(0, 6)  # левая таблица
+        tables_layout.setStretch(1, 6)  # правая таблица
+
+        # Добавляем контейнер с таблицами в основной layout
+        main_layout.addWidget(tables_container, 1)
+
+        # Гарантируем, что контейнер растягивается
+        tables_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
 
         # распределяем высоту между элементами главного лэйаута:
         # 0 — строка полей, 1 — сплиттер, 2 — футер, 3 — статусбар
@@ -432,7 +460,7 @@ class NewReport(QDialog):
             color: #111827;               /* gray-900 */
             border: 1px solid #D1D5DB;    /* gray-300 */
             border-radius: 12px;
-            padding: 8px 20px;            /* компактнее, чем у analyze */
+            padding: 8px 10px;            /* компактнее, чем у analyze */
             font-weight: 600;
         }
         QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; } /* gray-300 */
@@ -442,26 +470,6 @@ class NewReport(QDialog):
             color: #6B7280;               /* gray-500 */
             border-color: #E5E7EB;
         }
-        
-        /* Кнопки-пилюли */
-        QPushButton[pill="true"] {
-            background: #E5E7EB;
-            color: #111827;
-            border: 1px solid #D1D5DB;
-            border-radius: 12px;
-            padding: 8px 20px;
-            font-weight: 600;
-        }
-        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; }
-        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; }
-        QPushButton[pill="true"]:disabled {
-            background: #F3F4F6;
-            color: #6B7280;
-            border-color: #E5E7EB;
-        }
-        
-        
-          
         """)
 
         QTimer.singleShot(0, self.setup_columns_ratio)

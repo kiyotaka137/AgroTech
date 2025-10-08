@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
-from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict, nutri_reverse
+from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
 
 

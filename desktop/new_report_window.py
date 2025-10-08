@@ -11,7 +11,12 @@ from PyQt6.QtWidgets import (
     QLineEdit, QLabel, QAbstractItemView, QComboBox, QFileDialog,
     QHeaderView, QSizePolicy, QProgressBar,QSplitter
 )
-from PyQt6.QtGui import QFont, QMovie
+from PyQt6.QtGui import QFont, QMovie, QColor
+from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+
+from PyQt6.QtGui import QFontDatabase
+from pathlib import Path
+
 from PyQt6.QtCore import (Qt, QTimer, QSize)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
@@ -35,9 +40,43 @@ class NewReport(QDialog):
         except Exception:
             pass
         self.setModal(True)
+        self.setObjectName("newReportDlg")
 
         font = QFont("Segoe UI", 10)
         self.setFont(font)
+
+        # ===== Надёжная загрузка Inter независимо от рабочей директории =====
+        self._inter_family = None
+
+        def _try_load_inter() -> str | None:
+            """Вернёт имя гарнитуры Inter если шрифт удалось подключить, иначе None."""
+            here = Path(__file__).resolve().parent  # .../desktop
+            candidates = [
+                here / "fonts" / "inter-variable.ttf",  # desktop/fonts/inter-variable.ttf
+                here.parent / "desktop" / "fonts" / "inter-variable.ttf",  # на случай странных путей
+                here / "fonts" / "Inter-VariableFont_slnt,wght.ttf",  # альтернативное имя файла
+            ]
+            for p in candidates:
+                if p.is_file():
+                    font_id = QFontDatabase.addApplicationFont(str(p))
+                    fams = QFontDatabase.applicationFontFamilies(font_id)
+                    if fams:
+                        return fams[0]
+
+            # запасной вариант: загрузка из байтов (если путь всё-таки есть, но Qt не любит относительный)
+            for p in candidates:
+                try:
+                    data = p.read_bytes()
+                    if data:
+                        font_id = QFontDatabase.addApplicationFontFromData(data)
+                        fams = QFontDatabase.applicationFontFamilies(font_id)
+                        if fams:
+                            return fams[0]
+                except Exception:
+                    pass
+            return None
+
+        self._inter_family = _try_load_inter()
 
         # Пути выбранных файлов
         self.excel_path = None
@@ -46,8 +85,8 @@ class NewReport(QDialog):
         self._loading_dialog = None
         self._loading_movie = None
 
-        self._build_main()
-        self._build_statusbar()
+        self._build_statusbar()  # <- сначала создаём self.status_label
+        self._build_main()  # <- потом используем его внутри футера
 
         # стартовые 5 строк
         for _ in range(5):
@@ -61,6 +100,8 @@ class NewReport(QDialog):
         """При изменении размера окна пересчитываем столбцы"""
         super().resizeEvent(event)
         QTimer.singleShot(50, self.setup_columns_ratio)
+        QTimer.singleShot(0, self._fit_footer_by_one_row)
+
 
     def _build_main(self):
         container = QWidget()
@@ -68,8 +109,7 @@ class NewReport(QDialog):
         main_layout = QVBoxLayout(container)
         self.setLayout(main_layout)
 
-        # Поля ввода
-        # Поля ввода
+        '''# Поля ввода
         fields_layout = QHBoxLayout()
         name_lbl = QLabel("Имя:")
         name_lbl.setFixedWidth(40)
@@ -91,7 +131,7 @@ class NewReport(QDialog):
         fields_layout.addWidget(complex_lbl); fields_layout.addWidget(self.complex_edit)
         fields_layout.addSpacing(10)
         fields_layout.addWidget(period_lbl); fields_layout.addWidget(self.period_edit)
-        fields_layout.addStretch()
+        fields_layout.addStretch() '''
 
         # Поля ввода (одна строка)
         fields_layout = QHBoxLayout()
@@ -128,8 +168,27 @@ class NewReport(QDialog):
 
         # чтобы по высоте совпадало с инпутами
         btn_h = max(self.name_edit.sizeHint().height(), 28)
-        self.excel_btn.setFixedHeight(btn_h)
-        self.pdf_btn.setFixedHeight(btn_h)
+        #self.excel_btn.setFixedHeight(btn_h)
+        #self.pdf_btn.setFixedHeight(btn_h)
+
+        head_font = self.font()  # шрифт окна; доступен уже сейчас
+
+
+        for b in (self.excel_btn, self.pdf_btn):
+            b.setProperty("pill", True)  # тот же селектор, что для нижних
+            b.setFont(head_font)
+            b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
+            b.setMinimumWidth(92)  # чтобы не схлопывались
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            sh = QGraphicsDropShadowEffect(self)
+            sh.setBlurRadius(18)
+            sh.setOffset(0, 2)
+            sh.setColor(QColor(0, 0, 0, 40))
+            b.setGraphicsEffect(sh)
+
+        self.excel_btn.setMinimumWidth(72)  # ← ДОБАВЬ: чтобы кнопки не «схлопывались»
+        self.pdf_btn.setMinimumWidth(72)  # ← ДОБАВЬ
 
         fields_layout.addSpacing(8)
         fields_layout.addWidget(self.excel_btn)
@@ -158,6 +217,10 @@ class NewReport(QDialog):
         left_layout = QVBoxLayout(left_container)
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
+
+        for _pane in (left_container, right_container):
+            _pane.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
         #таблица сводный анализ(правая)
         self.right_table = QTableWidget(0,2)
         #self.right_table.setStyleSheet("QTableWidget { border-left: 1px solid #e6e6e6; }")
@@ -189,7 +252,7 @@ class NewReport(QDialog):
         self.right_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         # Стили для таблицы
         self.left_table.setShowGrid(True)
-        self.left_table.setStyleSheet("""
+        '''self.left_table.setStyleSheet("""
     QTableWidget {
         gridline-color: lightgray;
         border: none; 
@@ -206,9 +269,9 @@ class NewReport(QDialog):
     QTableWidget::item:selected {
         background-color: #e0e0e0; 
     }
-""")
+""")'''
         self.right_table.setShowGrid(True)
-        self.right_table.setStyleSheet("""
+        '''self.right_table.setStyleSheet("""
     QTableWidget {
         gridline-color: lightgray;
         border: none; 
@@ -225,7 +288,7 @@ class NewReport(QDialog):
     QTableWidget::item:selected {
         background-color: #e0e0e0; 
     }
-""")
+""")'''
 
         # заполняется начальными значениями правая таблица нутриенов
         for r, nutrient in enumerate(ROWSLEFT):
@@ -239,18 +302,18 @@ class NewReport(QDialog):
             item_fixed.setFlags(item_fixed.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
 
-        # добавить/удалить  для левой таблицы
+        ''''# добавить/удалить  для левой таблицы
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.addWidget(self._make_button("Добавить строку", self.add_row_for_left_table))
         left_buttons_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected_for_left_table))
-        left_buttons_layout.addStretch()
+        left_buttons_layout.addStretch()'''
 
 
         #сплитер для разделения таблиц
         splitter=QSplitter(Qt.Orientation.Horizontal)
         left_layout.addWidget(self.left_table)
         right_layout.addWidget(self.right_table)
-        left_layout.addLayout(left_buttons_layout)
+        #left_layout.addLayout(left_buttons_layout)
         splitter.addWidget(left_container)
         splitter.addWidget(right_container)
 
@@ -258,20 +321,362 @@ class NewReport(QDialog):
         splitter.setStretchFactor(0, 6)
         splitter.setStretchFactor(1, 6)
         main_layout.addWidget(splitter,1)
+
+        # гарантируем, что верх — сплиттер растягивается, низ — фикс
+        splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # распределяем высоту между элементами главного лэйаута:
+        # 0 — строка полей, 1 — сплиттер, 2 — футер, 3 — статусбар
+        main_layout.setStretch(0, 0)
+        main_layout.setStretch(1, 1)  # ← основной растягиваемый блок
+        main_layout.setStretch(2, 0)
+        # статусбар добавляется позже, но на всякий:
+        # main_layout.setStretch(3, 0)
+
+        '''# Нижняя полоса слева: "Добавить строку" и "Удалить выделенные"
+        footer_left_layout = QHBoxLayout()
+        footer_left_layout.setContentsMargins(12, 10, 12, 0)  # вровень с нижней областью
+        footer_left_layout.setSpacing(12)
+
+        self.btn_add_row_left = self._make_button("Добавить строку", self.add_row_for_left_table)
+        self.btn_remove_row_left = self._make_button("Удалить выделенные", self.remove_selected_for_left_table)
+
+        footer_left_layout.addWidget(self.btn_add_row_left)
+        footer_left_layout.addWidget(self.btn_remove_row_left)
+        footer_left_layout.addStretch()
+
+        main_layout.addLayout(footer_left_layout) '''
+
+        # единый блок: фон под таблицами + стили заголовков + красивая кнопка
+        self.setStyleSheet(self.styleSheet() + """
+        /* === общий фон окна и панелей слева/справа === */
+        #newReportDlg, #container, #paneLeft, #paneRight {
+            background: #F2F3F5; /* подбери HEX под твой базовый фон */
+        }
+
+        /* === фон внутри таблиц (viewport), чтобы пустота не была белой === */
+        #newReportDlg QTableWidget, 
+        #newReportDlg QTableView {
+            background: transparent;   /* само «окно» таблицы прозрачное */
+            border: none;
+        }
+        #newReportDlg QTableWidget::viewport, 
+        #newReportDlg QTableView::viewport {
+            background: #F2F3F5;       /* реальная заливка внутри таблиц */
+        }
+
+        /* === заголовки/угол/выделение (как было) === */
+        #newReportDlg QHeaderView::section {
+            border: 1px solid lightgray;
+            padding: 4px;
+            background-color: #f0f0f0;
+        }
+        #newReportDlg QTableCornerButton::section {
+            background-color: #f0f0f0;
+        }
+        #newReportDlg QTableWidget::item:selected {
+            background-color: #e0e0e0;
+        }
+
+        /* === убрать белую полосу у ручки сплиттера, если есть === */
+        #newReportDlg QSplitter::handle {
+            background: transparent;
+        }
+
+        /* === PRIMARY-кнопка «Анализировать» === */
+        QPushButton[primary="true"] {
+            background: #4DA3FF;
+            color: #ffffff;
+            border: 0px;
+            border-radius: 10px;
+            padding: 10px 24px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        QPushButton[primary="true"]:enabled:hover {
+            background: #5BB0FF;
+        }
+        QPushButton[primary="true"]:enabled:pressed {
+            background: #3B8EF0;
+        }
+        QPushButton[primary="true"]:focus {
+            outline: none;
+            border: 2px solid rgba(61, 131, 255, 0.8);
+        }
+        QPushButton[primary="true"]:disabled {
+            background: #BFD9FF;
+            color: rgba(255,255,255,0.85);
+        }
+        #footer { background: transparent; }  /* ← ДОБАВЬ ЭТУ СТРОКУ */
+        
+        #analyzeBtn {
+            background: #E5E7EB;          /* gray-200 */
+            color: #111827;               /* gray-900 */
+            border: 1px solid #D1D5DB;    /* gray-300 */
+            border-radius: 12px;
+            padding: 12px 28px;
+            font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+            font-weight: 600;
+        }
+        #analyzeBtn:enabled:hover  { background: #D1D5DB; }  /* gray-300 */
+        #analyzeBtn:enabled:pressed{ background: #9CA3AF; }  /* gray-400 */
+        #analyzeBtn:disabled {
+            background: #F3F4F6;          /* gray-100 */
+            color: #6B7280;               /* gray-500 */
+            border-color: #E5E7EB;
+        }
+
+        /* Кнопки-пилюли (как #analyzeBtn), но компактнее */
+        QPushButton[pill="true"] {
+            background: #E5E7EB;          /* gray-200 */
+            color: #111827;               /* gray-900 */
+            border: 1px solid #D1D5DB;    /* gray-300 */
+            border-radius: 12px;
+            padding: 8px 20px;            /* компактнее, чем у analyze */
+            font-weight: 600;
+        }
+        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; } /* gray-300 */
+        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; } /* gray-400 */
+        QPushButton[pill="true"]:disabled {
+            background: #F3F4F6;          /* gray-100 */
+            color: #6B7280;               /* gray-500 */
+            border-color: #E5E7EB;
+        }
+        
+        /* Кнопки-пилюли */
+        QPushButton[pill="true"] {
+            background: #E5E7EB;
+            color: #111827;
+            border: 1px solid #D1D5DB;
+            border-radius: 12px;
+            padding: 8px 20px;
+            font-weight: 600;
+        }
+        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; }
+        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; }
+        QPushButton[pill="true"]:disabled {
+            background: #F3F4F6;
+            color: #6B7280;
+            border-color: #E5E7EB;
+        }
+        
+        
+        /* Убрать нижнюю линию под вкладками */
+        QTabBar {
+            qproperty-drawBase: 0;   /* отключает рисование базовой линии */
+        }
+        
+        QTabWidget::pane {
+            border: none;            /* на всякий случай убираем рамку панели */
+        }
+        
+        /* Если у табов были свои бордеры — тоже уберём */
+        QTabBar::tab {
+            border: none;
+        }
+
+        QTabWidget {
+            border: none;
+            background: transparent;
+        }
+
+          
+        """)
+
         QTimer.singleShot(0, self.setup_columns_ratio)
 
         # Кнопка "Анализировать"
-        analyze_layout = QHBoxLayout()
-        analyze_layout.addStretch()
+        #analyze_layout = QHBoxLayout()
+        #analyze_layout.addStretch()
         self.analyze_btn = QPushButton("Анализировать")
-        self.analyze_btn.setProperty("primary", True)
-        self.analyze_btn.setFixedSize(400, 50)
-        self.analyze_btn.clicked.connect(self.analyze_clicked)
-        analyze_layout.addWidget(self.analyze_btn)
-        analyze_layout.addStretch()
-        main_layout.addLayout(analyze_layout)
 
-        
+        # Крупнее и жирнее только для этой кнопки
+        if self._inter_family:
+            f = QFont(self._inter_family, 16, QFont.Weight.DemiBold)  # 16px, полужирный
+        else:
+            f = QFont(self.font().family(), 16, QFont.Weight.DemiBold)  # fallback
+
+        # чуть увеличим кернинг
+        f.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 103)
+        self.analyze_btn.setFont(f)
+
+        # сделаем кнопку побольше
+        self.analyze_btn.setMinimumHeight(48)  # было 36/44 — станет выше
+        self.analyze_btn.setMinimumWidth(240)
+
+        self.analyze_btn.setProperty("primary", True)
+
+        # делаем кнопку приятнее по ощущениям
+        self.analyze_btn.setObjectName("analyzeBtn")
+        self.analyze_btn.setMinimumSize(220, 36)  # адаптивная высота/ширина
+        self.analyze_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # мягкая тень (работает в Qt через графический эффект)
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(22)
+        shadow.setOffset(0, 2)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        self.analyze_btn.setGraphicsEffect(shadow)
+
+        #self.analyze_btn.setFixedSize(400, 50)
+        self.analyze_btn.clicked.connect(self.analyze_clicked)
+        #analyze_layout.addWidget(self.analyze_btn)
+        #analyze_layout.addStretch()
+        #analyze_layout.addStretch()
+        #main_layout.addLayout(analyze_layout)
+
+        '''# нижняя полоса: слева кнопки левой таблицы, справа/по центру — уже созданная self.analyze_btn
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setContentsMargins(12, 10, 12, 10)
+        bottom_layout.setSpacing(12)
+
+        # две кнопки для левой таблицы (переехали вниз)
+        self.btn_add_row_left = self._make_button("Добавить строку", self.add_row_for_left_table)
+        self.btn_remove_row_left = self._make_button("Удалить выделенные", self.remove_selected_for_left_table)
+
+        bottom_layout.addWidget(self.btn_add_row_left)
+        bottom_layout.addWidget(self.btn_remove_row_left)
+
+        bottom_layout.addStretch()
+
+        # НЕ создаём кнопку заново — используем уже существующую self.analyze_btn
+        bottom_layout.addWidget(self.analyze_btn)
+
+        bottom_layout.addStretch()
+
+        main_layout.addLayout(bottom_layout)'''
+
+        # 1) Нижняя строка с утилитами слева (атрибут)
+        self.bottom_tools_layout = QHBoxLayout()
+        self.bottom_tools_layout.setContentsMargins(12, 2, 12, 0)
+        self.bottom_tools_layout.setSpacing(10)
+
+        self.btn_add_row_left = self._make_button("Добавить строку", self.add_row_for_left_table)
+        self.btn_remove_row_left = self._make_button("Удалить выделенные", self.remove_selected_for_left_table)
+        # --- сделать нижние кнопки как "Анализировать" ---
+        # тот же шрифт, высота, скругление и тень через то же свойство primary
+        same_font = self.analyze_btn.font()
+        same_height = self.analyze_btn.minimumHeight()
+
+        for b in (self.btn_add_row_left, self.btn_remove_row_left):
+            # такой же “тип” кнопки, на него уже есть стили в QSS:
+            #b.setProperty("primary", True)
+
+
+            # размеры и шрифт подгоняем к analyze_btn
+            b.setFont(same_font)
+            #b.setMinimumHeight(same_height)  # если хочешь меньше — поставь, например, 44
+            b.setMinimumWidth(160)  # можно убрать/изменить по вкусу
+
+            same_font = self.analyze_btn.font()
+
+            for b in (self.btn_add_row_left, self.btn_remove_row_left):
+                b.setFont(same_font)
+                b.setProperty("pill", True)  # ← будем красить как “пилюлю”
+                b.setMinimumHeight(40)  # ← сделать меньше, чем у Analyze (было 48)
+                b.setMinimumWidth(180)  # при желании уменьши/увеличь
+                b.setCursor(Qt.CursorShape.PointingHandCursor)
+
+                shadow = QGraphicsDropShadowEffect(self)
+                shadow.setBlurRadius(20)
+                shadow.setOffset(0, 2)
+                shadow.setColor(QColor(0, 0, 0, 50))
+                b.setGraphicsEffect(shadow)
+
+            # тень как у analyze_btn
+            shadow = QGraphicsDropShadowEffect(self)
+            shadow.setBlurRadius(24)
+            shadow.setOffset(0, 3)
+            shadow.setColor(QColor(0, 0, 0, 60))
+            b.setGraphicsEffect(shadow)
+        # --- / ---
+
+        self.bottom_tools_layout.addWidget(self.btn_add_row_left)
+        self.bottom_tools_layout.addWidget(self.btn_remove_row_left)
+        self.bottom_tools_layout.addStretch()
+
+        # 2) Отдельная строка — центральная кнопка (атрибут)
+        self.bottom_center_layout = QHBoxLayout()
+        self.bottom_center_layout.setContentsMargins(12, 0, 12, 2)
+        self.bottom_center_layout.setSpacing(0)
+        self.bottom_center_layout.addStretch()
+        self.bottom_center_layout.addWidget(self.analyze_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        self.bottom_center_layout.addStretch()
+
+        # 3) Футер-обёртка
+        self.footer = QWidget()
+        self.footer.setObjectName("footer")
+        self.footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.footer.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+        footer_layout = QVBoxLayout(self.footer)
+        footer_layout.setContentsMargins(12, 0, 12, 4)
+        footer_layout.setSpacing(2)
+
+        footer_layout.addLayout(self.bottom_tools_layout)
+        footer_layout.addLayout(self.bottom_center_layout)
+
+        # переносим статус внутрь футера
+        self.status_label.setParent(self.footer)
+        self.status_label.setContentsMargins(0, 0, 0, 0)
+        footer_layout.addWidget(self.status_label)
+
+        main_layout.addWidget(self.footer)
+
+        # первый автоподгон футера
+        QTimer.singleShot(0, self._fit_footer_by_one_row)
+
+        '''def _lower_footer_by_one_row_safe():
+            try:
+                row_h = self.right_table.verticalHeader().defaultSectionSize()
+
+                footer_layout = self.footer.layout()
+                m = footer_layout.contentsMargins()
+                spacing = footer_layout.spacing()
+
+                # реальные размеры вложенных строк
+                tools_h = bottom_tools_layout.sizeHint().height()
+                center_h = max(bottom_center_layout.sizeHint().height(),
+                               self.analyze_btn.sizeHint().height())
+
+                # минимальная высота, чтобы ничего не обрезалось
+                content_min = m.top() + tools_h + spacing + center_h + m.bottom()
+
+                # целим «опустить границу» на высоту одной строки, но не меньше контента
+                target_h = max(content_min, content_min - row_h)
+
+                self.footer.setFixedHeight(int(target_h))
+            except Exception:
+                pass
+
+        QTimer.singleShot(0, _lower_footer_by_one_row_safe)'''
+
+    def _row_px(self) -> int:
+        """Реальная высота строки правой таблицы (если нет строк — дефолт секции)."""
+        vh = self.right_table.verticalHeader()
+        if self.right_table.rowCount() > 0:
+            return vh.sectionSize(0)
+        return vh.defaultSectionSize()
+
+    def _fit_footer_by_one_row(self):
+        """
+        Уменьшаем суммарную высоту футера (включая статус) на высоту одной строки правой таблицы,
+        но не клипаем кнопку.
+        """
+        footer_layout = self.footer.layout()
+        m = footer_layout.contentsMargins()
+        spacing = footer_layout.spacing()
+
+        tools_h = self.bottom_tools_layout.sizeHint().height()
+        center_h = max(self.bottom_center_layout.sizeHint().height(),
+                       self.analyze_btn.sizeHint().height())
+        status_h = self.status_label.sizeHint().height()
+
+        content_min = m.top() + tools_h + spacing + center_h + spacing + status_h + m.bottom()
+
+        # целимся «опустить» на одну строку
+        target = max(content_min, content_min - self._row_px())
+        self.footer.setFixedHeight(int(target))
 
     def _make_button(self, text, slot):
         b = QPushButton(text)
@@ -281,7 +686,9 @@ class NewReport(QDialog):
     def _build_statusbar(self):
         # У QDialog нет statusBar, поэтому добавляем QLabel снизу
         self.status_label = QLabel("Готово")
-        self.layout().addWidget(self.status_label)
+        #self.layout().addWidget(self.status_label)
+
+
 
     def setup_columns_ratio(self):
         """Настройка соотношения столбцов 4:1:1:1:1"""
@@ -313,20 +720,19 @@ class NewReport(QDialog):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.left_table.setItem(row, c, item)
 
-
     def add_row_for_right_table(self):
         table = self.right_table
-        columns=COLUMNSRIGHT
+        columns = COLUMNSRIGHT
         row = table.rowCount()
         table.insertRow(row)
 
-        # Убеждаемся, что соотношение столбцов правильное
+        # ширины пересчитываем по месту
         self.setup_columns_ratio()
 
-        for c, col_name in enumerate(columns):
+        for c, _ in enumerate(columns):
             item = QTableWidgetItem("")
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.left_table.setItem(row, c, item)
+            self.right_table.setItem(row, c, item)
 
 
     def remove_selected_for_left_table(self):

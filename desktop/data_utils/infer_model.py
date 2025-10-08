@@ -9,6 +9,7 @@ import re
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
 
 #from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
@@ -243,6 +244,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     json_report = str(json_report)
     acids_dict = dict()
     importance_acid_dict = dict()
+    importance_nutri_dict = dict()
 
     data = load_data_from_json(json_report)
     data = clear_data(data)
@@ -262,6 +264,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
 
     # print(importance_nutri_dict)
     # print(importance_acid_dict)
+    make_uni_acids(json_report)
 
     with open(json_report, "r", encoding="utf-8") as f:
         json_data = json.load(f)
@@ -277,6 +280,29 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     return acids_dict
+
+
+def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
+    output_dir = name.split('/')[-1][:-5]
+
+    images = [Image.open(f"{graphics_path}/{output_dir}/{name}.png") for name in main_acids]
+
+    w, h = images[0].size
+    cols, rows = grid_size
+
+    grid_w = cols * w + (cols + 1)
+    grid_h = rows * h + (rows + 1)
+    grid = Image.new("RGB", (grid_w, grid_h), color="white")
+
+
+    for idx, img in enumerate(images):
+        r, c = divmod(idx, cols)
+        if r >= rows:
+            break
+
+        grid.paste(img, (w * c, h * r))
+
+    grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
 
 
 if __name__ == '__main__':

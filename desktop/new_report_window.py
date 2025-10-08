@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 from PyQt6.QtGui import QFontDatabase
 from pathlib import Path
 
-from PyQt6.QtCore import (Qt, QTimer, QSize)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
 

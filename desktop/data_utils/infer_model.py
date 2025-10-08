@@ -69,6 +69,10 @@ def extract_to_row(ration, nutrients, json_path):
             idx = llm_elems[orig]
             _, old_val = new_ration[idx]
             new_ration[idx] = (normalized, old_val)
+    # if llm_elems:
+    #     cleans = llm_cleaning(list([llm_elems.values]))
+    #     for k, v in cleans.items():
+    #         new_ration[llm_elems[k]][0] = v
 
     # Собираем словарь оригинал -> нормализовано
     # (подчистим пробелы/переводы строк, чтобы ключи совпадали с тем, что в JSON)
@@ -108,7 +112,6 @@ def load_data_from_json(path_name: str):
     with open(path_name, "r", encoding="utf-8") as f:
         json_file = json.load(f)
 
-    print(33)
     rational_rows = [(elem["Ингредиенты"], elem["%СВ"]) for elem in json_file['ration_rows']]
     nutrients_rows = [(elem["Нутриент"], elem["СВ"]) for elem in json_file['nutrients_rows']]
 
@@ -355,6 +358,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
             k: float(v[0])
             for k, v in acids_dict.items()
         }
+
 
     with open(json_report, "w", encoding="utf-8") as f:
         json.dump(json_data, f, ensure_ascii=False, indent=2)

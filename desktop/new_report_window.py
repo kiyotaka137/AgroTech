@@ -1119,9 +1119,9 @@ class RefactorReport(NewReport):
         super().__init__(parent)
         self.json_path = None
 
-        #УДАЛИТЬ ИЗ ИНИТА 
-        del self.thread 
-        del self.worker 
+        #УДАЛИТЬ ИЗ ИНИТА
+        del self.thread
+        del self.worker
 
     def analyze_clicked(self):
         self.analysis_started.emit()

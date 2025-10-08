@@ -3,7 +3,7 @@ import os
 import json
 import time
 from datetime import date, datetime
-from pathlib import Path
+from pathlib import Path 
 
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
@@ -815,8 +815,10 @@ class NewReport(QDialog):
             self.excel_path = path
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
-            rows = parse_excel_ration(path)
-            self.filling_left_table_from_file(rows)
+            rows_rationtable, rows_nutrient = parse_excel_ration(path)
+            print(rows_nutrient)
+            self.filling_left_table_from_file(rows_rationtable)
+            self.filling_right_table_from_file(rows_nutrient)
 
 
     def choose_pdf_file(self):
@@ -924,7 +926,22 @@ class NewReport(QDialog):
     #     QTimer.singleShot(100, lambda: self._finish_analysis())
     #     #self._finish_analysis()
 
+    def on_text_changed(self, text):
+        # Когда текст вводится — возвращаем прежний стиль
+        if text.strip():
+            self.name_edit.setStyleSheet(self.original_style)
+
     def analyze_clicked(self):
+        text = self.name_edit.text().strip()
+
+        if not text:
+            # Если пустое — красная обводка
+            self.original_style = self.name_edit.styleSheet()
+            self.name_edit.textChanged.connect(self.on_text_changed)
+            self.name_edit.setStyleSheet("border: 2px solid #e06c75;")
+            return
+       
+
         self.analysis_started.emit()
         self.analyze_btn.setEnabled(False)
         self.close()

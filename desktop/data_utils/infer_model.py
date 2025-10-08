@@ -58,6 +58,10 @@ def extract_to_row(ration, nutrients, json_path):
     #     cleans = llm_cleaning(list(llm_elems.values))
     #     for k, v in cleans.items():
     #         new_ration[llm_elems[k]][0] = v
+    # if llm_elems:
+    #     cleans = llm_cleaning(list(llm_elems.values))
+    #     for k, v in cleans.items():
+    #         new_ration[llm_elems[k]][0] = v
 
     new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
 

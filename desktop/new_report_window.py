@@ -9,15 +9,12 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QLineEdit, QLabel, QAbstractItemView, QComboBox, QFileDialog,
-    QHeaderView, QSizePolicy, QProgressBar,QSplitter
+    QHeaderView, QSizePolicy, QProgressBar,QSplitter, QGraphicsDropShadowEffect
 )
-from PyQt6.QtGui import QFont, QMovie, QColor
+from PyQt6.QtGui import QFont, QMovie, QColor, QFontDatabase
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
-from PyQt6.QtGui import QFontDatabase
-from pathlib import Path
-
-from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
 
@@ -27,8 +24,8 @@ COLUMNSRIGHT=["Нутриент","СВ"]
 
 
 class NewReport(QDialog):
-
-    analysis_started = pyqtSignal(dict)
+    analysis_started = pyqtSignal()
+    analysis_finished = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,6 +44,9 @@ class NewReport(QDialog):
 
         # ===== Надёжная загрузка Inter независимо от рабочей директории =====
         self._inter_family = None
+
+        self.thread = QThread()
+        self.worker = AnalysisWorker(self._finish_analysis)
 
         def _try_load_inter() -> str | None:
             """Вернёт имя гарнитуры Inter если шрифт удалось подключить, иначе None."""
@@ -461,25 +461,6 @@ class NewReport(QDialog):
         }
         
         
-        /* Убрать нижнюю линию под вкладками */
-        QTabBar {
-            qproperty-drawBase: 0;   /* отключает рисование базовой линии */
-        }
-        
-        QTabWidget::pane {
-            border: none;            /* на всякий случай убираем рамку панели */
-        }
-        
-        /* Если у табов были свои бордеры — тоже уберём */
-        QTabBar::tab {
-            border: none;
-        }
-
-        QTabWidget {
-            border: none;
-            background: transparent;
-        }
-
           
         """)
 
@@ -863,65 +844,97 @@ class NewReport(QDialog):
         return rows
 
 
+    # def analyze_clicked(self):
+    #     """
+    #     При нажатии: показываем модальное окно загрузки (имитация) 5 секунд,
+    #     затем собираем таблицу в JSON и сохраняем файл в папке reports.
+    #     """
+    #     # Отключаем кнопку чтобы избежать повторных нажатий
+    #     self.analyze_btn.setEnabled(False)
+
+    #     # --- Создаём простое модальное окно загрузки с GIF ---
+    #     loading = QDialog(self)
+    #     loading.setWindowTitle("Анализ — загрузка")
+    #     loading.setModal(True)
+    #     loading.setWindowModality(Qt.WindowModality.ApplicationModal)
+    #     loading.resize(360, 180)
+
+    #     layout = QVBoxLayout(loading)
+    #     layout.setContentsMargins(12, 12, 12, 12)
+    #     layout.setSpacing(8)
+
+    #     # Путь к GIF — пробуем несколько мест (корректируй по своему проекту)
+    #     gif_path = "cow.gif"
+    #     movie = None
+    #     try:
+    #         movie = QMovie(str(gif_path))
+    #     except Exception:
+    #         movie = None
+
+    #     gif_label = QLabel()
+    #     gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    #     if movie is not None and movie.isValid():
+    #         # При желании можно задать размер: movie.setScaledSize(QSize(96,96))
+    #         # movie.setScaledSize(QSize(96, 96))
+    #         gif_label.setMovie(movie)
+    #         movie.start()
+    #         # Сохраним в атрибуты, чтобы остановить позже
+    #         self._loading_movie = movie
+    #     else:
+    #         gif_label.setText("Загрузка...\n(анимация недоступна)")
+    #         gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    #     layout.addWidget(gif_label)
+
+    #     # Текст под GIF
+    #     lbl = QLabel("Анализ таблицы моделью...\n(имитация загрузки 5 секунд)")
+    #     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    #     layout.addWidget(lbl)
+
+    #     # Прогресс-бар только для UI (без реальной работы)
+    #     progress = QProgressBar()
+    #     progress.setRange(0, 0)  # бесконечный индикатор
+    #     layout.addWidget(progress)
+
+    #     # Покажем диалог и сохраним ссылку, чтобы закрыть позже
+    #     loading.show()
+    #     self._loading_dialog = loading
+
+    #     # 5 секунд "пустой" работы — placeholder
+    #     #QTimer.singleShot(5000, lambda: self._finish_analysis())
+
+    # def analyze_clicked(self):
+    #     # Сигнал — анализ начался
+    #     self.analysis_started.emit()
+    #     # Отключаем кнопку
+    #     self.analyze_btn.setEnabled(False)
+    #     self.close()
+    #     QTimer.singleShot(100, lambda: self._finish_analysis())
+    #     #self._finish_analysis()
+
     def analyze_clicked(self):
-        """
-        При нажатии: показываем модальное окно загрузки (имитация) 5 секунд,
-        затем собираем таблицу в JSON и сохраняем файл в папке reports.
-        """
-        # Отключаем кнопку чтобы избежать повторных нажатий
+        self.analysis_started.emit()
         self.analyze_btn.setEnabled(False)
+        self.close()
+        
+        self.worker.moveToThread(self.thread)
 
-        # --- Создаём простое модальное окно загрузки с GIF ---
-        loading = QDialog(self)
-        loading.setWindowTitle("Анализ — загрузка")
-        loading.setModal(True)
-        loading.setWindowModality(Qt.WindowModality.ApplicationModal)
-        loading.resize(360, 180)
+        # Подключаем сигналы
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.error.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
 
-        layout = QVBoxLayout(loading)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        # Запускаем
+        self.thread.start()
 
-        # Путь к GIF — пробуем несколько мест (корректируй по своему проекту)
-        gif_path = "cow.gif"
-        movie = None
-        try:
-            movie = QMovie(str(gif_path))
-        except Exception:
-            movie = None
-
-        gif_label = QLabel()
-        gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        if movie is not None and movie.isValid():
-            # При желании можно задать размер: movie.setScaledSize(QSize(96,96))
-            # movie.setScaledSize(QSize(96, 96))
-            gif_label.setMovie(movie)
-            movie.start()
-            # Сохраним в атрибуты, чтобы остановить позже
-            self._loading_movie = movie
-        else:
-            gif_label.setText("Загрузка...\n(анимация недоступна)")
-            gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        layout.addWidget(gif_label)
-
-        # Текст под GIF
-        lbl = QLabel("Анализ таблицы моделью...\n(имитация загрузки 5 секунд)")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl)
-
-        # Прогресс-бар только для UI (без реальной работы)
-        progress = QProgressBar()
-        progress.setRange(0, 0)  # бесконечный индикатор
-        layout.addWidget(progress)
-
-        # Покажем диалог и сохраним ссылку, чтобы закрыть позже
-        loading.show()
-        self._loading_dialog = loading
-
-        # 5 секунд "пустой" работы — placeholder
-        #QTimer.singleShot(5000, lambda: self._finish_analysis())
+    def _analysis_error(self, msg):
+        QMessageBox.critical(self, "Ошибка", f"Проблема с анализом:\n{msg}")
+        self.analyze_btn.setEnabled(True)
+        self.analysis_finished.emit()
+              
 
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
@@ -1002,7 +1015,8 @@ class NewReport(QDialog):
                 pass
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
-            self.close()
+            self.analysis_finished.emit()
+            #self.close()
 
 
     # === JSON API ===
@@ -1153,3 +1167,17 @@ class RefactorReport(NewReport):
     def get_json_path(self, path):
         self.json_path = path
 
+class AnalysisWorker(QObject):
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, func):
+        super().__init__()
+        self.func = func
+
+    def run(self):
+        try:
+            self.func()
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))

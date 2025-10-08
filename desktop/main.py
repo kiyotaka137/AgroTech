@@ -414,7 +414,6 @@ class MainWindow(QWidget):
                     input_json_path=report_file,
                     out_report_md=md_path,
                     update_json_with_report=True,
-                    copy_images=True  # todo: без картинок для серверной части
                 )
 
             create_md_webview(self.tab_report, md_path)

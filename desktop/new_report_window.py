@@ -1007,13 +1007,13 @@ class NewReport(QDialog):
                 )
 
             except Exception as e:
-                print("ошибка в _finish", e)
-                # mb = QMessageBox(self)
-                # mb.setIcon(QMessageBox.Icon.Critical)
-                # mb.setWindowTitle("Ошибка")
-                # mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
-                # mb.exec()
-                # self.status_label.setText("Ошибка при сохранении JSON.")
+                print("ошибка в 1_finish", e)
+                mb = QMessageBox(self)
+                mb.setIcon(QMessageBox.Icon.Critical)
+                mb.setWindowTitle("Ошибка")
+                mb.setText(f"Неизвестный ингридиент")
+                mb.exec()
+                self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(file_path)
 
             # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
@@ -1024,7 +1024,7 @@ class NewReport(QDialog):
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
-            print("ошибка в _finish", e)
+            print("ошибка в 2_finish", e)
 
             # mb = QMessageBox(self)
             # mb.setIcon(QMessageBox.Icon.Critical)
@@ -1054,12 +1054,16 @@ class NewReport(QDialog):
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
             self.analysis_finished.emit()
-            #self.close()
 
 
     # === JSON API ===
     def load_from_json(self, data, type_of_table):
         """Заполняет таблицу из массива JSON"""
+
+        if type_of_table == "meta":
+            self.name_edit.setText(data.get("name", ""))
+            self.complex_edit.setText(data.get("complex", ""))
+            self.period_edit.setText(data.get("period", ""))
 
         if type_of_table == "left":
             self.left_table.setRowCount(0)  # Очищаем таблицу

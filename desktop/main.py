@@ -15,7 +15,6 @@ from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
     QEasingCurve, QThread, pyqtSignal, QObject, QTimer, QSize
 )
-from .config import get_server_url
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import NewReport, RefactorReport
@@ -29,7 +28,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
 
-        init_llm_in_main_thread(n_ctx=1024, n_batch=128)  # один раз, в GUI-потоке
+        #init_llm_in_main_thread(n_ctx=1024, n_batch=128)  # один раз, в GUI-потоке
 
         self.setWindowTitle("Шаблон интерфейса")
         self.setGeometry(100, 100, 1400, 800)
@@ -565,8 +564,7 @@ def send_new_reports():
     Читает все JSON файлы из ./records, объединяет их и отправляет на сервер
     одним запросом через client.add_records().
     """
-    server_url = get_server_url()
-    client = APIClient(server_url)
+    client = APIClient("http://localhost:8000")
     records_path = Path("desktop/reports")
 
     all_records = []

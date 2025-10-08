@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
-from .llm_infer import llm_cleaning
+# from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict, nutri_reverse
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
@@ -62,13 +62,13 @@ def extract_to_row(ration, nutrients, json_path):
 
     # Нормализация через LLM тех, кого не распознали
     unknowns = list(llm_elems.keys())
-    if unknowns:
-        cleans = llm_cleaning(unknowns)  # <<-- ВАЖНО: именно ключи!
-        # cleans: {оригинал: нормализованное}
-        for orig, normalized in cleans.items():
-            idx = llm_elems[orig]
-            _, old_val = new_ration[idx]
-            new_ration[idx] = (normalized, old_val)
+    # if unknowns:
+    #     cleans = llm_cleaning(unknowns)
+    #     for orig, normalized in cleans.items():
+    #         idx = llm_elems[orig]
+    #         _, old_val = new_ration[idx]
+    #         new_ration[idx] = (normalized, old_val)
+
     # if llm_elems:
     #     cleans = llm_cleaning(list([llm_elems.values]))
     #     for k, v in cleans.items():
@@ -76,17 +76,15 @@ def extract_to_row(ration, nutrients, json_path):
 
     # Собираем словарь оригинал -> нормализовано
     # (подчистим пробелы/переводы строк, чтобы ключи совпадали с тем, что в JSON)
-    def _norm_key(s: str) -> str:
-        return re.sub(r"\s+", " ", s).strip() if isinstance(s, str) else s
 
-    new_ration_dct = {_norm_key(orig): _norm_key(norm)
+    new_ration_dct = {orig: norm
                       for (orig, _), (norm, _) in zip(ration, new_ration)}
 
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     for json_row in data.get("ration_rows", []):
-        key = _norm_key(json_row.get("Ингредиенты", ""))
+        key = json_row.get("Ингредиенты", "")
         json_row["Normalized"] = new_ration_dct.get(key, None)  # безопасно
 
     with open(json_path, "w", encoding="utf-8") as f:

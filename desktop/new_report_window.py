@@ -1177,7 +1177,6 @@ class RefactorReport(NewReport):
                     input_json_path=self.json_path,
                     out_report_md=md_path,
                     update_json_with_report=True,
-                    copy_images=True  # todo: без картинок для серверной части
                 )
 
             except Exception as e:

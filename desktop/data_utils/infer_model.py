@@ -5,6 +5,7 @@ import joblib as jl
 import shap
 import re
 
+from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, uniq_step
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
@@ -28,7 +29,7 @@ def fix_name(value):
         return None
 
 
-def extract_to_row(ration, nutrients):
+def extract_to_row(ration, nutrients, json_path):
     row = [0] * (len(uniq_changed_ration) + len(uniq_step))
     columns = uniq_changed_ration + uniq_step
 
@@ -36,10 +37,39 @@ def extract_to_row(ration, nutrients):
     uniq_step_dict = {elem: ind + len(uniq_changed_ration) for ind, elem in enumerate(uniq_step)}
 
     name_mapping = change_mapping()
+    llm_elems = {}
+    new_ration = []
 
     for i, (elem, val) in enumerate(ration):
-        clear_elem = name_mapping[elem]  # todo: сделать вилку с ллм
-        row[uniq_dict[clear_elem]] += float(val.replace(",", "."))
+        if elem in name_mapping:
+            clear_elem = name_mapping[elem]
+        else:
+            clear_elem = fix_name(elem)
+            if clear_elem is None:
+                llm_elems[elem] = i
+
+        new_ration.append((clear_elem, val))
+
+    if llm_elems:
+        cleans = llm_cleaning(list(llm_elems.values))
+        for k, v in cleans.items():
+            new_ration[llm_elems[k]][0] = v
+
+    new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # добавляем поле Normalized в каждый элемент ration_rows
+    for json_row in data.get("ration_rows", []):
+        json_row["Normalized"] = new_ration_dct[json_row.get("Ингредиенты", "")]
+
+    # сохраняем обратно
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    for elem, val in new_ration:
+        row[uniq_dict[elem]] += float(val.replace(",", "."))
 
     for i, (elem, val) in enumerate(nutrients):
 
@@ -61,7 +91,7 @@ def load_data_from_json(path_name: str):
     rational_rows = [(elem["Ингредиенты"], elem["%СВ"]) for elem in json_file['ration_rows']]
     nutrients_rows = [(elem["Нутриент"], elem["СВ"]) for elem in json_file['nutrients_rows']]
 
-    final_row = extract_to_row(rational_rows, nutrients_rows)
+    final_row = extract_to_row(rational_rows, nutrients_rows, path_name)
     return final_row
 
 
@@ -151,13 +181,13 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         importance = predict_importance_acids(data[0], acid)
         importance_acid_dict[acid] = importance
 
-    #print(importance_dict)
+    print(importance_acid_dict)
     return acids_dict
 
 
 if __name__ == '__main__':
-    #print(load_data_from_json("../reports/Норм_2025-10-07_1759796029.json"))
-    print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
-                           model_path="models/classic_pipe/acids"))
+    print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
+    #print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
+    #                       model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

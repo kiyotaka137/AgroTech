@@ -23,7 +23,13 @@ class RecordsInModel(BaseModel):
     def to_list(self):
         return self.root
 
-# response для GET
+# response для POST
+class RecordsInsertedResponse(BaseModel):
+    """Модель ответа после добавления записей"""
+    inserted: int = Field(..., example=2, description="Количество добавленных записей")
+    duplicates: int = Field(..., example=1, description="Количество пропущенных дубликатов")
+
+# остальные модели остаются без изменений...
 class RecordOut(BaseModel):
     """Модель возвращаемой записи"""
     id: UUID = Field(..., description="UUID записи")
@@ -34,11 +40,6 @@ class RecordOut(BaseModel):
         description="Данные записи в формате JSON"
     )
     created_at: str = Field(..., description="Время создания записи в ISO формате")
-
-# response для POST
-class RecordsInsertedResponse(BaseModel):
-    """Модель ответа после добавления записей"""
-    inserted: int = Field(..., example=2, description="Количество добавленных записей")
 
 # зависимость: собираем сервис с pool из app.state
 def get_service(request: Request) -> RecordsService:
@@ -53,8 +54,8 @@ def get_service(request: Request) -> RecordsService:
     status_code=status.HTTP_201_CREATED,
     response_model=RecordsInsertedResponse,
     summary="Добавить записи",
-    description="Добавляет одну или несколько записей в базу данных",
-    response_description="Количество успешно добавленных записей"
+    description="Добавляет одну или несколько записей в базу данных. Дубликаты по полю name игнорируются.",
+    response_description="Количество добавленных записей и количество пропущенных дубликатов"
 )
 async def add_records(
     payload: RecordsInModel,
@@ -62,13 +63,14 @@ async def add_records(
 ):
     try:
         items = payload.to_list()
-        await service.add_records(items)
-        return {"inserted": len(items)}
+        result = await service.add_records(items)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+# остальные эндпоинты без изменений...
 @router.get(
     "/",
     response_model=List[RecordOut],
@@ -91,11 +93,6 @@ async def get_records(service: RecordsService = Depends(get_service)):
     response_description="Запись с указанным name"
 )
 async def get_record(name: str, service: RecordsService = Depends(get_service)):
-    """
-    Получение одной записи по полю name.
-    - **name**: значение поля name, по которому ищем запись.
-    Возвращаем последнюю по времени создания запись с таким name.
-    """
     try:
         row = await service.get_by_name(name)
         if row is None:
@@ -105,6 +102,7 @@ async def get_record(name: str, service: RecordsService = Depends(get_service)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
 @router.get(
     "/names/all",
     response_model=List[str],

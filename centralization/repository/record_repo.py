@@ -8,13 +8,14 @@ class RecordsRepository:
     def __init__(self, pool):
         self.pool = pool
 
-    async def insert_records(self, items: List[Dict[str, Any]]):
+    async def insert_records(self, items: List[Dict[str, Any]]) -> int:
         """
         items: список объектов, каждый объект должен содержать ключ 'name' и любые другие поля.
         Сохраняем name отдельно, а data — сериализованный весь объект (включая name).
+        Возвращает количество фактически добавленных записей (исключая дубликаты).
         """
         if not items:
-            return
+            return 0
 
         now = datetime.now(timezone.utc)
         params = []
@@ -29,10 +30,21 @@ class RecordsRepository:
 
         async with self.pool.acquire() as conn:
             async with conn.transaction():
-                await conn.executemany(
-                    "INSERT INTO records (id, name, data, created_at) VALUES ($1, $2, $3, $4)",
+                result = await conn.executemany(
+                    """
+                    INSERT INTO records (id, name, data, created_at) 
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (name) DO NOTHING
+                    """,
                     params
                 )
+                # executemany возвращает строку вида "INSERT 0 2", где последнее число - количество вставленных строк
+                if result and "INSERT" in result:
+                    # Извлекаем количество вставленных строк из результата
+                    parts = result.split()
+                    if len(parts) >= 3:
+                        return int(parts[2])
+                return len(items)  # fallback
 
     async def fetch_all(self) -> List[Dict[str, Any]]:
         result = []
@@ -67,6 +79,7 @@ class RecordsRepository:
                 "data": data_dict,
                 "created_at": r["created_at"].isoformat()
             }
+    
     async def fetch_all_names(self) -> List[str]:
         """Возвращает список всех уникальных имен"""
         async with self.pool.acquire() as conn:

@@ -6,10 +6,11 @@ class RecordsService:
     def __init__(self, repo: RecordsRepository):
         self.repo = repo
 
-    async def add_records(self, items: List[Dict[str, Any]]):
+    async def add_records(self, items: List[Dict[str, Any]]) -> Dict[str, int]:
         # Валидация: каждый элемент должен быть dict и содержать поле 'name'
         if not isinstance(items, list):
             raise ValueError("Payload must be a list of objects")
+        
         cleaned = []
         for idx, itm in enumerate(items, start=1):
             if not isinstance(itm, dict):
@@ -17,7 +18,14 @@ class RecordsService:
             if "name" not in itm:
                 raise ValueError(f"Each item must contain 'name' field. Error at index {idx}")
             cleaned.append(itm)
-        await self.repo.insert_records(cleaned)
+        
+        inserted_count = await self.repo.insert_records(cleaned)
+        duplicates_count = len(cleaned) - inserted_count
+        
+        return {
+            "inserted": inserted_count,
+            "duplicates": duplicates_count
+        }
 
     async def get_all(self) -> List[Dict[str, Any]]:
         return await self.repo.fetch_all()
@@ -28,5 +36,6 @@ class RecordsService:
         Если не найдено — возвращает None.
         """
         return await self.repo.fetch_one(name)
+    
     async def get_all_names(self) -> List[str]:
         return await self.repo.fetch_all_names()

@@ -146,24 +146,15 @@ def predict_importance_acids(data, acid, name,
             else:
                 amount_of_neg += 1
 
-    output_dir = name.split('/')[-1][:-5]
-    print(output_dir)
+    fname = os.path.basename(name)
+    output_dir, ext = os.path.splitext(fname)
+    print(graphics_path, output_dir)
     if not os.path.exists(f"{graphics_path}/{output_dir}"):
         os.makedirs(f"{graphics_path}/{output_dir}")
 
     shap.plots.waterfall(shap_values[0])
     plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
     plt.close()
-
-    with open(name, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
-        if "graphics" not in json_data:
-            json_data["graphics"] = {}
-
-        json_data["graphics"][acid] = str(Path(f"{graphics_path}/{output_dir}/{acid}.png").resolve())
-
-    with open(name, "w", encoding="utf-8") as f:
-        json.dump(json_data, f, ensure_ascii=False, indent=2)
 
     return feature_val_dict
 
@@ -211,8 +202,8 @@ def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
 
         nutri_dict[item] = feature_val_dict
 
-        output_dir = name.split('/')[-1][:-5]
-        print(output_dir, name)
+        fname = os.path.basename(name)
+        output_dir, ext = os.path.splitext(fname)
         if not os.path.exists(f"{graphics_path}/{output_dir}"):
             os.makedirs(f"{graphics_path}/{output_dir}")
 
@@ -288,7 +279,8 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
 
 
 def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
-    output_dir = name.split('/')[-1][:-5]
+    fname = os.path.basename(name)
+    output_dir, ext = os.path.splitext(fname)
 
     images = [Image.open(f"{graphics_path}/{output_dir}/{name}.png") for name in main_acids]
 
@@ -308,12 +300,19 @@ def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
         grid.paste(img, (w * c, h * r))
 
     grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
+    with open(name, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+        if "graphics" not in json_data:
+            json_data["graphics"] = {}
+        json_data["graphics"]["uni"] = str(Path(f"{graphics_path}/{output_dir}/uni_acids.png").resolve())
 
+    with open(name, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == '__main__':
     #print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
-    print(predict_from_file(json_report="desktop/reports/fgh_2025-10-08_1759938451.json",
+    print(predict_from_file(json_report="desktop/reports/report_2025-10-08_1759938513.json",
                            model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

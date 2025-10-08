@@ -159,3 +159,30 @@ QToolTip {
     font-size: 12px;
 }
 
+/* === Вкладки === */
+QTabWidget, QTabWidget::pane {
+    border: none;
+    background: #fafafa !important;
+}
+
+QTabBar::tab {
+    padding: 8px 16px;
+    background: #f5f5f5 !important;
+    color: #555 !important;
+    border: none;
+    margin-right: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+    background: #fafafa !important;
+    color: #000 !important;
+    font-weight: 600;
+    border-bottom: 2px solid #66aaff !important;
+}
+
+QTabBar::tab:hover {
+    background: #eeeeee !important;
+}
+

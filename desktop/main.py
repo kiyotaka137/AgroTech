@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QIcon, QMovie
 from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
-    QEasingCurve, QThread, pyqtSignal, QObject
+    QEasingCurve, QThread, pyqtSignal, QObject, QTimer
 )
 
 from .report_loader import ReportLoader
@@ -512,19 +512,46 @@ class MainWindow(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Гифка
-        label = QLabel()
+        gif_label = QLabel()
         movie = QMovie("desktop/icons/loading_trans.gif")  # путь к гифке
-        label.setMovie(movie)
+        gif_label.setMovie(movie)
         movie.start()
-        layout.addWidget(label)
+        layout.addWidget(gif_label)
 
-        # Надписи
-        text = QLabel("Анализ данных... Подождите немного 🧠")
-        text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(text)
+        # Надпись
+        self.loading_text = QLabel("Нейросети думают 🧠")
+        self.loading_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.loading_text)
 
+        # Фразы
+        self.loading_phrases = [
+            "Нейросети думают 🧠",
+            "Коровы жуют траву 🐄",
+            "Сенсор анализа травы перегревается 🌿🔥",
+            "Молоко почти готово 🥛",
+            "Идёт расчёт удоев... 📊",
+            "Думаем о будущем сельского хозяйства 🚜"
+        ]
+        self._phrase_index = 0
+
+        # Таймер для смены фраз
+        self.phrase_timer = QTimer(self)
+        self.phrase_timer.timeout.connect(self._change_phrase)
+        self.phrase_timer.start(2000)
+
+        # Добавляем вкладку
         self.tabs.addTab(self.analysis_tab, "Анализ")
         self.tabs.setCurrentWidget(self.analysis_tab)
+
+
+    def _change_phrase(self):
+        """Меняет текст под гифкой"""
+        if not hasattr(self, "loading_phrases") or not self.loading_phrases:
+            return
+        self._phrase_index = (self._phrase_index + 1) % len(self.loading_phrases)
+        self.loading_text.setText(self.loading_phrases[self._phrase_index])
+
+    
 
     def finish_analysis(self):
         # Удаляем вкладку анализа, если она есть

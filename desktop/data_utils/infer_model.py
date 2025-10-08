@@ -3,7 +3,11 @@ import pandas as pd
 import numpy as np
 import joblib as jl
 import shap
+import os
 import re
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
@@ -76,7 +80,9 @@ def clear_data(data):
     return data
 
 
-def predict_importance_acids(data, acid, explainer_path="models/classic_pipe/acid_explainers"):
+def predict_importance_acids(data, acid, name,
+                             explainer_path="models/classic_pipe/acid_explainers",
+                             graphics_path="desktop/graphics"):
     feature_names = jl.load(f"{explainer_path}/feature_names.pkl")
     explainer = jl.load(f"{explainer_path}/{acid}_explainer.pkl")
 
@@ -106,10 +112,20 @@ def predict_importance_acids(data, acid, explainer_path="models/classic_pipe/aci
             else:
                 amount_of_neg += 1
 
+    output_dir = name.split('/')[-1][:-5]
+    if not os.path.exists(f"{graphics_path}/{output_dir}"):
+        os.makedirs(f"{graphics_path}/{output_dir}")
+
+    shap.plots.waterfall(shap_values[0])
+    plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
     return feature_val_dict
 
 
-def predict_importance_nutri(data, nutri_path="models/classic_pipe/nutri", importance_path="models/classic_pipe/nutri_explainers"):
+def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
+                             importance_path="models/classic_pipe/nutri_explainers",
+                             graphics_path="desktop/graphics"):
     nutri_dict = dict()
     feature_names = jl.load(f"{importance_path}/feature_names.pkl")
 
@@ -150,6 +166,14 @@ def predict_importance_nutri(data, nutri_path="models/classic_pipe/nutri", impor
 
         nutri_dict[item] = feature_val_dict
 
+        output_dir = name.split('/')[-1][:-5]
+        if not os.path.exists(f"{graphics_path}/{output_dir}"):
+            os.makedirs(f"{graphics_path}/{output_dir}")
+
+        shap.plots.waterfall(shap_values[0])
+        plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
     return nutri_dict
 
 
@@ -170,7 +194,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     data = load_data_from_json(json_report)
     data = clear_data(data)
 
-    importance_nutri_dict = predict_importance_nutri(data)
+    importance_nutri_dict = predict_importance_nutri(data, json_report)
 
     data = data.to_numpy()
 
@@ -180,7 +204,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         acids_dict[acid] = logit
 
         set_ensemble(model)
-        importance = predict_importance_acids(data[0], acid)
+        importance = predict_importance_acids(data[0], acid, json_report)
         importance_acid_dict[acid] = importance
 
     #print(importance_nutri_dict)

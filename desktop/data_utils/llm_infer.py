@@ -1,4 +1,4 @@
-from llama_cpp import Llama, LlamaGrammar
+#from llama_cpp import Llama, LlamaGrammar
 from transformers import AutoTokenizer
 
 from .prompt import grammar_str, norm_prompt, sys_prompt

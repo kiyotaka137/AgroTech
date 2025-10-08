@@ -1054,7 +1054,6 @@ class NewReport(QDialog):
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
             self.analysis_finished.emit()
-            #self.close()
 
 
     # === JSON API ===

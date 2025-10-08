@@ -489,18 +489,6 @@ class MainWindow(QWidget):
 
         dialog.exec()
 
-    # def show_analysis_tab(self):
-    #     # Скрываем старые вкладки
-    #     self.tabs.setTabEnabled(self.tabs.indexOf(self.ration_stack), False)
-    #     self.tabs.setTabEnabled(self.tabs.indexOf(self.tab_report), False)
-
-    #     # Включаем вкладку Анализ и переключаемся на неё
-    #     self.tabs.setTabEnabled(self.analysis_index, True)
-    #     self.tabs.setCurrentIndex(self.analysis_index)
-
-    #     # Запускаем GIF
-    #     self.movie.start()
-
     def show_analysis_tab(self):
         """Добавляет временную вкладку 'Анализ' и показывает гифку"""
         # Прячем существующие вкладки
@@ -520,7 +508,7 @@ class MainWindow(QWidget):
         # Гифка — уменьшим размер
         gif_label = QLabel()
         movie = QMovie("desktop/icons/loading_trans.gif")
-        movie.setScaledSize(QSize(192, 96))  # <-- уменьшили гифку
+        movie.setScaledSize(QSize(192, 96))  
         gif_label.setMovie(movie)
         movie.start()
         layout.addWidget(gif_label, alignment=Qt.AlignmentFlag.AlignCenter)

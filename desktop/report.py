@@ -1,17 +1,48 @@
 from __future__ import annotations
-import json
+import json, re, shutil
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union, Iterable
 from pathlib import Path
 from datetime import datetime
+import markdown
 import re
+import sys
 
-# ------------------------------
+
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import QUrl
+from PyQt6.QtWidgets import QWidget, QTextEdit, QTextBrowser, QVBoxLayout
+
+try:
+    import markdown
+    _HAS_MD = True
+except Exception:
+    _HAS_MD = False
+
+
+
+IMG_TAG_RE = re.compile(r'<img\s+[^>]*src="([^"]+)"([^>]*)>', flags=re.I)
+
+# Тип для удобства
+Textish = Union[QTextEdit, QTextBrowser]
+
+CSS_DEFAULT = """
+body { font-family: Segoe UI, Roboto, Arial, sans-serif; line-height:1.6; margin:16px; }
+h1,h2,h3 { margin-top:1.2em; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #d0d7de; padding: 6px 8px; }
+th { background: #f6f8fa; text-align: left; }
+pre code { display:block; padding:8px; background:#f6f8fa; border-radius:6px; }
+code { background:#f6f8fa; padding:2px 4px; border-radius:4px; }
+img { max-width:100%; height:auto; }
+"""
+
+
+# ==========================
 # УТИЛИТЫ
-# ------------------------------
+# ==========================
 
 def to_float_ru(s: str | float | int | None) -> Optional[float]:
-    """Безопасно парсим число из русской строки c запятой."""
     if s is None:
         return None
     if isinstance(s, (int, float)):
@@ -28,14 +59,56 @@ def to_float_ru(s: str | float | int | None) -> Optional[float]:
 def pct(x: Optional[float], digits: int = 2) -> str:
     return "-" if x is None else f"{x:.{digits}f}%"
 
-def find_first(patterns: List[str], text: str) -> bool:
-    t = text.lower()
-    return any(p in t for p in patterns)
+def posix_path(p: Path) -> str:
+    # Для Markdown лучше использовать прямые слеши
+    return p.as_posix()
 
-# ------------------------------
-# НОРМАЛИЗАЦИЯ ИНГРЕДИЕНТОВ
-# ------------------------------
+def slug(s: str) -> str:
+    # Простейший слаг для имён файлов
+    s = re.sub(r"\s+", "_", s.strip())
+    s = re.sub(r"[^\w\-.А-Яа-яЁё_]", "", s)
+    return s
 
+# ==========================
+# НОРМАЛИЗАЦИЯ (фоллбэк)
+# ==========================
+
+BASE_ALIASES = {
+    "жом": "свекла",
+    "жмых": "рапс",
+    "жир": "защищённый жир/жиры",
+    "дрожжи": "концентраты",
+    "лед": "концентраты",
+    "шрот соев": "соя",
+    "соев": "соя",
+    "шрот рапс": "рапс",
+    "рапс": "рапс",
+    "кукуруз": "кукуруза",
+    "солнух": "подсолнечник",
+    "подсолнеч": "подсолнечник",
+    "судан": "суданская трава",
+    "сено": "сено",
+    "силос": "силос",
+    "сенаж": "сенаж",
+    "свекл": "свекла",
+    "премикс": "премикс/минералы",
+    "соль": "соль/минералы",
+    "поташ": "буфер/минералы",
+}
+
+def normalize_ingredient(name: str) -> str:
+    raw = name.strip()
+    if re.match(r"^\d{4}\.\d{2}\.\d{2}\.\d{1,2}\.\d{2}(?:\s*/\s*\d{2}\.\d{2}\.\d{4})?$", raw):
+        return "корм (код)"
+    low = raw.lower()
+    for k, v in BASE_ALIASES.items():
+        if k in low:
+            return v
+    if "жир" in low:
+        return "защищённый жир/жиры"
+    if "шрот" in low:
+        return "белковый шрот"
+    return raw
 
 @dataclass
 class RationRow:
@@ -48,54 +121,26 @@ def normalize_ration_rows(rows: List[Dict[str, str]]) -> List[RationRow]:
     for r in rows:
         name = str(r.get("Ингредиенты", "")).strip()
         dm = to_float_ru(r.get("%СВ"))
-        norm = r.get("Normalized", "")
-        out.append(RationRow(
-            original=name,
-            normalized=norm,
-            dm_percent=dm
-        ))
+        normalized = r.get("Normalized")
+        normalized = normalized if (isinstance(normalized, str) and normalized.strip()) else normalize_ingredient(name)
+        out.append(RationRow(original=name, normalized=normalized, dm_percent=dm))
     return out
 
-# ------------------------------
-# ПРОФИЛИ И РЕКОМЕНДАЦИИ (ЭВРИСТИКИ)
-# ------------------------------
+# ==========================
+# ЦЕЛИ / КЛАССИФИКАЦИЯ КИСЛОТ
+# ==========================
 
-# Лёгкие ориентиры-«диапазоны по умолчанию».
-# ВАЖНО: это лишь шаблон! Подставь свои целевые коридоры,
-# используемые в твоей практике/лаборатории.
 DEFAULT_TARGETS: Dict[str, Tuple[Optional[float], Optional[float]]] = {
-    "Пальмитиновая": (25.0, 31.0),   # ↑ при избытке пальмового жира
-    "Стеариновая":   (8.0,  12.5),   # ↑ при стеариновых добавках/переплаве
-    "Олеиновая":     (22.0, 28.0),   # ↑ от рапсовых/высокоолеиновых источников
-    "Линолевая":     (1.5,  3.5),    # ↑ от соя/подсолнечник/кукуруза
-    "Лауриновая":    (2.0,  4.4),
-}
-
-# Маппинг категорий -> вклад по жирным кислотам (знаки — направление влияния)
-# Значения — «вес влияния» (условные единицы), используются для подсказок.
-FA_INFLUENCE = {
-    "защищённый жир/жиры": {"Пальмитиновая": +3.0, "Стеариновая": +1.0},
-    "рапс":                {"Олеиновая": +2.5, "Линолевая": +1.0},
-    "соя":                 {"Линолевая": +2.5},  # у сои высокая ω-6 (линолевая)
-    "подсолнечник":        {"Линолевая": +3.0},  # особенно традиц. подсолнечник
-    "кукуруза":            {"Линолевая": +1.5, "Олеиновая": +0.5},
-    "свекла":              {"Пальмитиновая": -0.3},  # как «разбавитель» ЖК за счёт СВ/клетч.
-    "сенаж":               {"Пальмитиновая": -0.2},
-    "силос":               {"Пальмитиновая": -0.2},
-    "белковый шрот":       {"Линолевая": +0.8},  # общее правило, если вид не уточнён
-    "премикс/минералы":    {},
-    "соль/минералы":       {},
-    "буфер/минералы":      {},
-    "корм (код)":          {},
+    "Пальмитиновая": (25.0, 31.0),
+    "Стеариновая":   (8.0,  12.5),
+    "Олеиновая":     (22.0, 28.0),
+    "Линолевая":     (1.5,  3.5),
+    "Лауриновая":    (2.0,  4.4),  # обновлено по твоему правилу
 }
 
 def classify_acids(current: Dict[str, float],
                    targets: Dict[str, Tuple[Optional[float], Optional[float]]] = DEFAULT_TARGETS
                    ) -> Dict[str, str]:
-    """
-    Возвращает по каждой кислоте статус: 'низко'/'в норме'/'высоко'
-    согласно целевым коридорам. Если в коридоре есть None, сравниваем по доступной границе.
-    """
     status: Dict[str, str] = {}
     for name, val in current.items():
         lo, hi = targets.get(name, (None, None))
@@ -107,71 +152,9 @@ def classify_acids(current: Dict[str, float],
             status[name] = "в норме"
     return status
 
-def suggest_changes(acids: Dict[str, float],
-                    ration: List[RationRow],
-                    targets: Dict[str, Tuple[Optional[float], Optional[float]]] = DEFAULT_TARGETS
-                    ) -> Dict[str, List[str]]:
-    """
-    Формирует списки 'увеличить' / 'уменьшить' по категориям ингредиентов,
-    чтобы сдвинуть профиль кислот в желаемую сторону.
-    """
-    status = classify_acids(acids, targets)
-    present_cats = set(r.normalized for r in ration)
-
-    increase: List[str] = []
-    decrease: List[str] = []
-    notes:    List[str] = []
-
-    # ПАЛЬМИТИНОВАЯ
-    if status.get("Пальмитиновая") == "высоко":
-        if "защищённый жир/жиры" in present_cats:
-            decrease.append("защищённый жир/жиры (особенно пальмовые фракции)")
-        increase.extend(["рапс (жмых/шрот, масло высокоолеиновое при необходимости)",
-                         "подсолнечник (для разбавления насыщенных ЖК)"])
-        notes.append("Высокая пальмитиновая часто связана с пальмовыми защищёнными жирами.")
-
-    if status.get("Пальмитиновая") == "низко":
-        increase.append("защищённый жир/жиры (аккуратно, под задачу выхода молочного жира)")
-
-    # СТЕАРИНОВАЯ
-    if status.get("Стеариновая") == "высоко":
-        decrease.append("жиры с высоким содержанием стеариновой (гидрогенизированные фракции)")
-        notes.append("Переизбыток стеариновой иногда сопровождается снижением перевариваемости Ж.")
-    if status.get("Стеариновая") == "низко":
-        notes.append("Низкая стеариновая — обычно не проблема, корректируется общим балансом насыщ./ненасыщ. жиров.")
-
-    # ОЛЕИНОВАЯ
-    if status.get("Олеиновая") == "низко":
-        increase.append("рапс / высокоолеиновый подсолнечник / кукуруза (масляные компоненты)")
-    if status.get("Олеиновая") == "высоко":
-        decrease.append("масла/жиры с высоким содержанием олеиновой (канола/высокоолеиновый подсолнечник)")
-
-    # ЛИНОЛЕВАЯ
-    if status.get("Линолевая") == "низко":
-        increase.extend(["соя (шрот/жмых, при балансе по СП)", "подсолнечник", "кукуруза"])
-    if status.get("Линолевая") == "высоко":
-        decrease.extend(["соя", "подсолнечник"])
-        notes.append("Слишком много линолевой (ω-6) может смещать баланс PUFA — следи за соотношением с ω-3.")
-
-    # ЛАУРИН
-    if status.get("Лауриновая") == "высоко":
-        decrease.append("жиры с долей лауриновой (кокос/пальмоядровые компоненты)")
-    if status.get("Лауриновая") == "низко":
-        notes.append("Лауриновая обычно невелика; низкие значения редко требуют целевой коррекции.")
-
-    # Уточнения по тому, что реально есть в рационе
-    increase = sorted(set(increase))
-    decrease = sorted(set(decrease))
-
-    return {
-        "increase": increase,
-        "decrease": decrease,
-        "notes": notes
-    }
-
-# ------------------------------
-# ОТЧЁТ
-# ------------------------------
+# ==========================
+# РЕНДЕРИНГ ОТЧЁТА
+# ==========================
 
 REPORT_HEADER = """# Отчёт по профилю жирных кислот и рациону
 
@@ -179,6 +162,58 @@ REPORT_HEADER = """# Отчёт по профилю жирных кислот и
 **Период:** {period}  
 **Дата отчёта:** {now}  
 """
+
+ACID_ORDER = ["Лауриновая", "Линолевая", "Олеиновая", "Пальмитиновая", "Стеариновая"]
+
+def copy_asset(src: str | Path, assets_dir: Path, new_name: Optional[str] = None) -> Optional[Path]:
+    if not src:
+        return None
+    src_path = Path(src)
+    if not src_path.exists():
+        return None
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    dst_name = new_name if new_name else src_path.name
+    dst = assets_dir / dst_name
+    if src_path.resolve() != dst.resolve():
+        shutil.copy2(src_path, dst)
+    return dst
+
+def render_acid_graphs_first(graphics: Dict[str, str], assets_dir: Optional[Path]) -> str:
+    """
+    Вставляет графики важности рациона на кислоты в начале отчёта.
+    Ключи — названия кислот. Если assets_dir указан — копируем картинки в assets/.
+    """
+    lines = ["\n## Важность рациона для жирных кислот (графики)\n"]
+    for acid in ACID_ORDER:
+        img_path = graphics.get(acid)
+        if not img_path:
+            continue
+        rel = img_path
+        if assets_dir is not None:
+            copied = copy_asset(img_path, assets_dir, new_name=f"{slug(acid)}.png")
+            if copied is not None:
+                rel = posix_path(Path("assets") / copied.name)
+        # Используем HTML <img> для гарантированного рендера локальных путей и контроля ширины
+        lines.append(f'**{acid}**  \n<img src="{rel}" alt="{acid}" width="720">')
+    if len(lines) == 1:
+        return ""  # ничего не добавлять, если нет картинок
+    return "\n\n".join(lines) + "\n"
+
+def render_other_graphs(graphics: Dict[str, str], assets_dir: Optional[Path]) -> str:
+    # Собираем графики по числовым ключам "0","1",...
+    numeric_keys = sorted([k for k in graphics.keys() if re.fullmatch(r"\d+", k)], key=lambda x: int(x))
+    if not numeric_keys:
+        return ""
+    lines = ["\n## Прочие графики\n"]
+    for k in numeric_keys:
+        p = graphics[k]
+        rel = p
+        if assets_dir is not None:
+            copied = copy_asset(p, assets_dir, new_name=Path(p).name)
+            if copied is not None:
+                rel = posix_path(Path("assets") / copied.name)
+        lines.append(f'<img src="{rel}" alt="graph_{k}" width="720">')
+    return "\n\n".join(lines) + "\n"
 
 def render_ration_table(ration: List[RationRow]) -> str:
     lines = ["\n## Состав рациона (по % СВ)\n",
@@ -194,7 +229,10 @@ def render_acids_table(acids: Dict[str, float],
              "| Кислота | Значение | Целевой коридор | Статус |",
              "|---|---:|:---:|:---:|"]
     status = classify_acids(acids, targets)
-    for k, v in acids.items():
+    for k in ACID_ORDER:
+        if k not in acids:
+            continue
+        v = acids[k]
         lo, hi = targets.get(k, (None, None))
         target = f"{'' if lo is None else f'{lo:.1f}'} — {'' if hi is None else f'{hi:.1f}'}".strip()
         if target == "—":
@@ -202,41 +240,79 @@ def render_acids_table(acids: Dict[str, float],
         lines.append(f"| {k} | {v:.2f}% | {target} | {status.get(k,'')} |")
     return "\n".join(lines)
 
-def render_recommendations(sugg: Dict[str, List[str]]) -> str:
-    sections = ["\n## Рекомендации по корректировке\n"]
-    inc = sugg.get("increase", [])
-    dec = sugg.get("decrease", [])
-    notes = sugg.get("notes", [])
+def render_importance_for_acids(importance_acid: Dict[str, Dict[str, float]], top_k: int = 6) -> str:
+    def esc(s: str) -> str:
+        # На всякий: экранируем вертикальные черты в названиях факторов
+        return s.replace("|", "\\|")
 
-    if inc:
-        sections.append("**Увеличить долю/ввести:**")
-        for x in inc:
-            sections.append(f"- {x}")
-        sections.append("")
+    if not importance_acid:
+        return ""
 
-    if dec:
-        sections.append("**Снизить долю/ограничить:**")
-        for x in dec:
-            sections.append(f"- {x}")
-        sections.append("")
+    lines = ["\n## Важность факторов для кислот (↑ повышает, ↓ понижает)\n"]
 
-    if notes:
-        sections.append("**Примечания:**")
-        for n in notes:
-            sections.append(f"- {n}")
-        sections.append("")
+    for acid in ACID_ORDER:
+        imp = importance_acid.get(acid)
+        if not imp:
+            continue
 
-    sections.append("> ВНИМАНИЕ: предложения носят ориентировочный характер. ")
-    sections.append("> Перед внедрением изменений проверь баланс СП/ЭС, крахмала, NDF, минералов и ограничений по жирам.")
-    return "\n".join(sections)
+        items = sorted(imp.items(), key=lambda kv: abs(kv[1]), reverse=True)[:top_k]
 
-def build_report(doc: Dict) -> str:
-    meta = doc.get("meta", {})
+        # Подзаголовок + пустая строка перед таблицей — критично для Markdown
+        lines.append(f"### {acid}")
+        lines.append("")  # <-- пустая строка обязательна
+
+        # Таблица с выравниванием: название слева, вес справа, стрелка по центру
+        lines.append("| Фактор | Вес | Направление |")
+        lines.append("|:--|--:|:--:|")
+
+        for name, w in items:
+            arrow = "↑" if w > 0 else ("↓" if w < 0 else "·")
+            lines.append(f"| {esc(name)} | {w:.2f} | {arrow} |")
+
+        lines.append("")  # разделительная пустая строка между таблицами
+
+    return "\n".join(lines)
+
+
+def render_importance_for_nutrients(importance_nutrient: Dict[str, Dict[str, float]], top_k: int = 5) -> str:
+    """
+    Для каждого нутриента: какие категории/ингредиенты сильнее всего его **повышают** (Top+)
+    и что, наоборот, связано со снижением (Top-).
+    """
+    if not importance_nutrient:
+        return ""
+    lines = ["\n## Что увеличить/снизить для изменения нутриентов\n"]
+    for nutrient, imp_map in importance_nutrient.items():
+        items = sorted(imp_map.items(), key=lambda kv: kv[1], reverse=True)
+        top_pos = [(n, w) for n, w in items if w > 0][:top_k]
+        top_neg = sorted([(n, w) for n, w in imp_map.items() if w < 0], key=lambda kv: kv[1])[:top_k]
+
+        lines.append(f"**{nutrient}**")
+        if top_pos:
+            lines.append("_Чтобы повысить:_")
+            for n, w in top_pos:
+                lines.append(f"- {n} (вес {w:.2f})")
+        if top_neg:
+            lines.append("_Что обычно снижает:_")
+            for n, w in top_neg:
+                lines.append(f"- {n} (вес {w:.2f})")
+        lines.append("")
+    return "\n".join(lines)
+
+def build_report(doc: Dict, copy_images: bool = True, out_dir: Optional[Path] = None) -> str:
+    meta = doc.get("meta", {}) or {}
     ration_rows = doc.get("ration_rows", []) or []
     acids = doc.get("result_acids", {}) or {}
+    importance_acid = doc.get("importance_acid", {}) or {}
+    importance_nutrient = doc.get("importance_nutrient", {}) or {}
+    graphics = doc.get("graphics", {}) or {}
 
     ration = normalize_ration_rows(ration_rows)
-    sugg = suggest_changes(acids, ration)
+
+    # где хранить ассеты
+    assets_dir = None
+    if copy_images and out_dir is not None:
+        assets_dir = out_dir / "assets"
 
     parts = [
         REPORT_HEADER.format(
@@ -244,15 +320,26 @@ def build_report(doc: Dict) -> str:
             period=meta.get("period", "") or "-",
             now=datetime.now().strftime("%Y-%m-%d %H:%M")
         ),
-        render_ration_table(ration),
+        # 1) Сначала — графики важности рациона на кислоты:
+        render_acid_graphs_first(graphics, assets_dir),
+        # 2) Таблица ЖК:
         render_acids_table(acids),
-        render_recommendations(sugg),
+        # 3) Важность факторов для кислот:
+        render_importance_for_acids(importance_acid),
+        # 4) Состав рациона:
+        render_ration_table(ration),
+        # 5) Что увеличить/снизить для нутриентов:
+        render_importance_for_nutrients(importance_nutrient),
+        # 6) Прочие графики:
+        render_other_graphs(graphics, assets_dir),
+        "\n> Дисклеймер: рекомендации/веса — модельные ориентиры. "
+        "Перед изменениями проверяйте баланс СП/Энергии, крахмала, NDF, минералов и ограничений по жирам.\n"
     ]
-    return "\n".join(parts)
+    return "\n".join([p for p in parts if p])  # убрать пустые секции
 
-# ------------------------------
+# ==========================
 # IO-ОБВЁРТКИ
-# ------------------------------
+# ==========================
 
 def load_json(path: str | Path) -> Dict:
     with open(path, "r", encoding="utf-8") as f:
@@ -264,39 +351,180 @@ def save_json(path: str | Path, data: Dict) -> None:
 
 def write_report_files(input_json_path: str | Path,
                        out_report_md: Optional[str | Path] = None,
-                       update_json_with_report: bool = True) -> Tuple[str, str | None]:
+                       update_json_with_report: bool = True,
+                       copy_images: bool = True) -> Tuple[str, Optional[str]]:
     """
+    Собирает отчёт и, при необходимости, копирует картинки в ./assets рядом с .md.
     Возвращает (путь_к_json, путь_к_md_или_None)
     """
-    input_json_path = str(input_json_path)
+    input_json_path = Path(input_json_path)
     doc = load_json(input_json_path)
 
-    # Если в JSON пока нет 'result_acids', ничего не ломаем — просто сделаем отчёт из того, что есть.
-    report_md = build_report(doc)
-
-    # Сохраняем MD
+    # Куда писать MD
     if out_report_md is None:
-        stem = Path(input_json_path).with_suffix("").name
-        out_report_md = Path(input_json_path).with_name(stem + "_report.md")
+        stem = input_json_path.with_suffix("").name
+        out_report_md = input_json_path.with_name(stem + "_report.md")
+    out_report_md = Path(out_report_md)
+    out_dir = out_report_md.parent
+
+    # Собрать отчёт
+    report_md = build_report(doc, copy_images=copy_images, out_dir=out_dir)
+
+    # Сохранить MD
+    out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_report_md, "w", encoding="utf-8") as f:
         f.write(report_md)
 
-    # Опционально — вклеиваем отчёт в JSON
+    # Приклеить в JSON
     if update_json_with_report:
         doc["report"] = report_md
         save_json(input_json_path, doc)
 
-    return input_json_path, str(out_report_md)
+    return str(input_json_path), str(out_report_md)
 
-# ------------------------------
-# Пример CLI
-# ------------------------------
+# ==========================
+# CLI
+# =========================
+
+
+def _wrap_html(body: str, css: Optional[str]) -> str:
+    return f'<!doctype html><html><head><meta charset="utf-8"><style>{css or CSS_DEFAULT}</style></head><body>{body}</body></html>'
+
+def _ensure_layout(w: QWidget) -> QVBoxLayout:
+    lay = w.layout()
+    if lay is None:
+        lay = QVBoxLayout(w)
+        w.setLayout(lay)
+    return lay
+
+def _convert_md_to_html(md_text: str) -> str:
+    if not _HAS_MD:
+        safe = md_text.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+        return f"<pre>{safe}</pre>"
+    return markdown.markdown(md_text, extensions=["extra","tables","fenced_code","sane_lists"])
+
+# --- НОВОЕ: автоматический поиск desktop/graphics/<report_id> ---
+
+def _find_desktop_root(md_path: Path) -> Optional[Path]:
+    for p in md_path.resolve().parents:
+        if p.name.lower() == "desktop":
+            return p
+    return None
+
+def _infer_report_id(md_path: Path) -> str:
+    # 'report_2025-10-07_1759855680.md' -> 'report_2025-10-07_1759855680'
+    # '..._report.md' тоже поддержим: отрежем суффикс
+    stem = md_path.stem
+    return stem[:-7] if stem.endswith("_report") else stem
+
+def _compute_graphics_dir(md_path: Path) -> Optional[Path]:
+    desktop_root = _find_desktop_root(md_path)
+    if desktop_root is None:
+        return None
+    report_id = _infer_report_id(md_path)
+    return (desktop_root / "graphics" / report_id).resolve()
+
+def _best_existing_path(src: str, base_dir: Path, graphics_dir: Optional[Path]) -> Optional[Path]:
+    # URL? оставляем
+    if re.match(r'^(?:https?|file)://', src, flags=re.I):
+        return None
+    # абсолютный win/posix путь?
+    if re.match(r'^[A-Za-z]:[\\/]|^\\\\|^/', src):
+        p = Path(src)
+        return p if p.exists() else None
+    # относительный:
+    # 1) пытаемся рядом с .md
+    p1 = (base_dir / src).resolve()
+    if p1.exists():
+        return p1
+    # 2) если есть desktop/graphics/<report_id>, ищем там по basename
+    if graphics_dir is not None:
+        p2 = (graphics_dir / Path(src).name).resolve()
+        if p2.exists():
+            return p2
+    return None
+
+def _absolutize_img_srcs(html: str, base_dir: Path, graphics_dir: Optional[Path]) -> str:
+    def _subst(m: re.Match) -> str:
+        src, tail = m.group(1), m.group(2)
+        found = _best_existing_path(src, base_dir, graphics_dir)
+        if found is None:
+            return m.group(0)  # оставить как есть (вдруг baseUrl покроет)
+        url = QUrl.fromLocalFile(str(found)).toString()
+        return f'<img src="{url}"{tail}>'
+    return IMG_TAG_RE.sub(_subst, html)
+
+# --- основной API ---
+
+def create_md_webview(
+    target: Union[Textish, QWidget],
+    md_path: Union[str, Path],
+    *,
+    engine: str = "webengine",
+    css: Optional[str] = None,
+) -> QWidget:
+    md_path = Path(md_path)
+    base_dir = md_path.parent.resolve()
+    base_url = QUrl.fromLocalFile(str(base_dir) + "/")
+
+    # 1) конвертируем MD -> HTML
+    md_text = md_path.read_text(encoding="utf-8")
+    body_html = _convert_md_to_html(md_text)
+    html = _wrap_html(body_html, css)
+
+    # 2) превращаем все src в абсолютные file://, подхватывая desktop/graphics/<report_id>
+    graphics_dir = _compute_graphics_dir(md_path)
+    html = _absolutize_img_srcs(html, base_dir, graphics_dir)
+
+    # 3) отрисовка в заданный виджет
+    if isinstance(target, (QTextEdit, QTextBrowser)):
+        if isinstance(target, QTextBrowser):
+            target.setOpenExternalLinks(True)
+        target.document().setBaseUrl(base_url)
+        target.setHtml(html)
+        return target
+
+    lay = _ensure_layout(target)
+    viewer = target.property("_md_view")
+    if viewer is not None:
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+            if isinstance(viewer, QWebEngineView):
+                viewer.setHtml(html, baseUrl=base_url)
+                return viewer
+        except Exception:
+            pass
+        if isinstance(viewer, QTextBrowser):
+            viewer.document().setBaseUrl(base_url)
+            viewer.setHtml(html)
+            return viewer
+
+    if engine in ("auto", "webengine"):
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+            viewer = QWebEngineView()
+            viewer.setHtml(html, baseUrl=base_url)
+            lay.addWidget(viewer)
+            target.setProperty("_md_view", viewer)
+            return viewer
+        except Exception:
+            pass
+
+    viewer = QTextBrowser()
+    viewer.setOpenExternalLinks(True)
+    viewer.document().setBaseUrl(base_url)
+    viewer.setHtml(html)
+    lay.addWidget(viewer)
+    target.setProperty("_md_view", viewer)
+    return viewer
+
+
 
 if __name__ == "__main__":
-
     write_report_files(
         input_json_path="desktop/reports/report_2025-10-07_1759855680.json",
-        out_report_md="output.md",
-        update_json_with_report=True
+        out_report_md="output2.md",
+        update_json_with_report=True,
+        copy_images=True
     )
     print("Готово.")

@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import traceback
 from datetime import date, datetime
 from pathlib import Path
 
@@ -14,9 +15,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QMovie, QColor, QFontDatabase
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
-from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread, pyqtSlot)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
+from .report import write_report_files
 
 ROWSLEFT = ['K (%)', 'aNDFom фуража (%)', 'СЖ (%)', 'CHO B3 медленная фракция (%)', 'Растворимая клетчатка (%)', 'Крахмал (%)', 'peNDF (%)', 'aNDFom (%)', 'ЧЭЛ 3x NRC (МДжоуль/кг)', 'CHO B3 pdNDF (%)', 'Сахар (ВРУ) (%)', 'НСУ (%)', 'ОЖК (%)', 'НВУ (%)', 'CHO C uNDF (%)', 'СП (%)', 'RD Крахмал 3xУровень 1 (%)']
 COLUMNSLEFT = ["Ингредиенты","%СВ"]
@@ -138,24 +140,24 @@ class NewReport(QDialog):
         name_lbl = QLabel("Имя:");
         name_lbl.setFixedWidth(40)
         self.name_edit = QLineEdit(placeholderText="Введите имя");
-        self.name_edit.setFixedWidth(220)
+        self.name_edit.setFixedWidth(160)
 
         complex_lbl = QLabel("Комплекс:");
         complex_lbl.setFixedWidth(80)
         self.complex_edit = QLineEdit(placeholderText="Введите комплекс");
-        self.complex_edit.setFixedWidth(220)
+        self.complex_edit.setFixedWidth(160)
 
         period_lbl = QLabel("Дата:");
         period_lbl.setFixedWidth(60)
         self.period_edit = QLineEdit(placeholderText="например: 2025-01");
-        self.period_edit.setFixedWidth(160)
+        self.period_edit.setFixedWidth(120)
 
         fields_layout.addWidget(name_lbl);
         fields_layout.addWidget(self.name_edit)
-        fields_layout.addSpacing(10)
+        fields_layout.addSpacing(8)
         fields_layout.addWidget(complex_lbl);
         fields_layout.addWidget(self.complex_edit)
-        fields_layout.addSpacing(10)
+        fields_layout.addSpacing(8)
         fields_layout.addWidget(period_lbl);
         fields_layout.addWidget(self.period_edit)
 
@@ -177,18 +179,15 @@ class NewReport(QDialog):
         for b in (self.excel_btn, self.pdf_btn):
             b.setProperty("pill", True)  # тот же селектор, что для нижних
             b.setFont(head_font)
-            b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
-            b.setMinimumWidth(92)  # чтобы не схлопывались
+            #b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
+            #b.setMinimumWidth(92)  # чтобы не схлопывались
             b.setCursor(Qt.CursorShape.PointingHandCursor)
 
             sh = QGraphicsDropShadowEffect(self)
-            sh.setBlurRadius(18)
+            sh.setBlurRadius(4)
             sh.setOffset(0, 2)
             sh.setColor(QColor(0, 0, 0, 40))
             b.setGraphicsEffect(sh)
-
-        self.excel_btn.setMinimumWidth(72)  # ← ДОБАВЬ: чтобы кнопки не «схлопывались»
-        self.pdf_btn.setMinimumWidth(72)  # ← ДОБАВЬ
 
         fields_layout.addSpacing(8)
         fields_layout.addWidget(self.excel_btn)
@@ -196,8 +195,6 @@ class NewReport(QDialog):
 
         # добавляем строку в разметку ТЕПЕРЬ, после кнопок
         main_layout.addLayout(fields_layout)
-
-        #main_layout.addLayout(fields_layout)
 
         # Кнопки Excel
         ''' files_layout = QHBoxLayout()
@@ -217,7 +214,7 @@ class NewReport(QDialog):
         left_layout = QVBoxLayout(left_container)
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
-
+        
         for _pane in (left_container, right_container):
             _pane.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
@@ -310,20 +307,53 @@ class NewReport(QDialog):
 
 
         #сплитер для разделения таблиц
-        splitter=QSplitter(Qt.Orientation.Horizontal)
-        left_layout.addWidget(self.left_table)
-        right_layout.addWidget(self.right_table)
-        #left_layout.addLayout(left_buttons_layout)
-        splitter.addWidget(left_container)
-        splitter.addWidget(right_container)
+        # splitter=QSplitter(Qt.Orientation.Horizontal)
+        # left_layout.addWidget(self.left_table)
+        # right_layout.addWidget(self.right_table)
+        
+        # #left_layout.addLayout(left_buttons_layout)
+        # splitter.addWidget(left_container)
+        # splitter.addWidget(right_container)
 
-        # установка соотношения таблиц
-        splitter.setStretchFactor(0, 6)
-        splitter.setStretchFactor(1, 6)
-        main_layout.addWidget(splitter,1)
+        # splitter.setHandleWidth(0)           # ручка исчезнет визуально
+        # splitter.setChildrenCollapsible(False)  # запрещает "сплющивание" таблиц
+         
+
+        # # установка соотношения таблиц
+        # splitter.setStretchFactor(0, 6)
+        # splitter.setStretchFactor(1, 6)
+        # main_layout.addWidget(splitter,1)
 
         # гарантируем, что верх — сплиттер растягивается, низ — фикс
-        splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        #splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Контейнер для таблиц
+        tables_container = QWidget()
+        tables_layout = QHBoxLayout(tables_container)
+        tables_layout.setContentsMargins(0, 0, 0, 0)
+        tables_layout.setSpacing(16)  # расстояние между таблицами
+
+        #Блокируем горизонтальную промотку
+        self.left_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.left_table.horizontalScrollBar().setDisabled(True)
+
+        self.right_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.right_table.horizontalScrollBar().setDisabled(True)
+
+        # Добавляем таблицы
+        tables_layout.addWidget(self.left_table)
+        tables_layout.addWidget(self.right_table)
+
+        # Определяем растяжение, чтобы обе таблицы занимали равные части
+        tables_layout.setStretch(0, 6)  # левая таблица
+        tables_layout.setStretch(1, 6)  # правая таблица
+
+        # Добавляем контейнер с таблицами в основной layout
+        main_layout.addWidget(tables_container, 1)
+
+        # Гарантируем, что контейнер растягивается
+        tables_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
 
         # распределяем высоту между элементами главного лэйаута:
         # 0 — строка полей, 1 — сплиттер, 2 — футер, 3 — статусбар
@@ -432,7 +462,7 @@ class NewReport(QDialog):
             color: #111827;               /* gray-900 */
             border: 1px solid #D1D5DB;    /* gray-300 */
             border-radius: 12px;
-            padding: 8px 20px;            /* компактнее, чем у analyze */
+            padding: 8px 10px;            /* компактнее, чем у analyze */
             font-weight: 600;
         }
         QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; } /* gray-300 */
@@ -442,26 +472,6 @@ class NewReport(QDialog):
             color: #6B7280;               /* gray-500 */
             border-color: #E5E7EB;
         }
-        
-        /* Кнопки-пилюли */
-        QPushButton[pill="true"] {
-            background: #E5E7EB;
-            color: #111827;
-            border: 1px solid #D1D5DB;
-            border-radius: 12px;
-            padding: 8px 20px;
-            font-weight: 600;
-        }
-        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; }
-        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; }
-        QPushButton[pill="true"]:disabled {
-            background: #F3F4F6;
-            color: #6B7280;
-            border-color: #E5E7EB;
-        }
-        
-        
-          
         """)
 
         QTimer.singleShot(0, self.setup_columns_ratio)
@@ -818,7 +828,6 @@ class NewReport(QDialog):
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
             rows_rationtable, rows_nutrient = parse_pdf_for_tables(path)
-            print(rows_nutrient)
             self.filling_left_table_from_file(rows_rationtable)
             self.filling_right_table_from_file(rows_nutrient)
 
@@ -935,6 +944,7 @@ class NewReport(QDialog):
 
     def _analysis_error(self, msg):
         QMessageBox.critical(self, "Ошибка", f"Проблема с анализом:\n{msg}")
+
         self.analyze_btn.setEnabled(True)
         self.analysis_finished.emit()
               
@@ -969,34 +979,42 @@ class NewReport(QDialog):
             # работа мл моделей
             try:
                 result_acids = predict_from_file(file_path)
-                data["result_acids"] = {
-                    k: float(v[0])
-                    for k, v in result_acids.items()
-                }
+                jsonname = os.path.splitext(os.path.basename(file_path))[0]
+                md_path = "desktop/final_reports/" + jsonname + ".md"
+
+                write_report_files(
+                    input_json_path=file_path,
+                    out_report_md=md_path,
+                    update_json_with_report=True,
+                    copy_images=True  # todo: без картинок для серверной части
+                )
+
             except Exception as e:
-                mb = QMessageBox(self)
-                mb.setIcon(QMessageBox.Icon.Critical)
-                mb.setWindowTitle("Ошибка")
-                mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
-                mb.exec()
-                self.status_label.setText("Ошибка при сохранении JSON.")
+                print("ошибка в _finish", e)
+                # mb = QMessageBox(self)
+                # mb.setIcon(QMessageBox.Icon.Critical)
+                # mb.setWindowTitle("Ошибка")
+                # mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
+                # mb.exec()
+                # self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(file_path)
 
-            data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-
-            # Перезаписываем файл с добавленным результатом
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
+            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
+            #
+            # # Перезаписываем файл с добавленным результатом
+            # with open(file_path, "w", encoding="utf-8") as f:
+            #     json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
-            mb = QMessageBox(self)
-            mb.setIcon(QMessageBox.Icon.Critical)
-            mb.setWindowTitle("Ошибка")
-            mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            mb.exec()
-            self.status_label.setText("Ошибка при сохранении JSON.")
+            print("ошибка в _finish", e)
+
+            # mb = QMessageBox(self)
+            # mb.setIcon(QMessageBox.Icon.Critical)
+            # mb.setWindowTitle("Ошибка")
+            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
+            # mb.exec()
+            # self.status_label.setText("Ошибка при сохранении JSON.")
 
         finally:
             # Остановим анимацию, если была
@@ -1074,7 +1092,6 @@ class NewReport(QDialog):
 
                     # Ищем соответствующее значение в словаре
                     value = nutrients.get(key_text)  # Используем get чтобы избежать KeyError
-                    print(key_text, value)
                     # Создаем или получаем элемент для правой колонки
                     value_item = self.right_table.item(row, 1)
                     if value_item is None:
@@ -1101,6 +1118,22 @@ class RefactorReport(NewReport):
         super().__init__(parent)
         self.json_path = None
 
+    def analyze_clicked(self):
+        self.analysis_started.emit()
+        self.analyze_btn.setEnabled(False)
+
+        self.worker.moveToThread(self.thread)
+
+        # Подключаем сигналы
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.error.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        # Запускаем
+        self.thread.start()
+
 
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
@@ -1110,17 +1143,19 @@ class RefactorReport(NewReport):
             with open(self.json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-
-            with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
             # работа мл моделей
             try:
                 result_acids = predict_from_file(self.json_path)
-                data["result_acids"] = {
-                    k: float(v[0])
-                    for k, v in result_acids.items()
-                }
+                jsonname = os.path.splitext(os.path.basename(self.json_path))[0]
+                md_path = "desktop/final_reports/" + jsonname + ".md"
+
+                write_report_files(
+                    input_json_path=self.json_path,
+                    out_report_md=md_path,
+                    update_json_with_report=True,
+                    copy_images=True  # todo: без картинок для серверной части
+                )
+
             except Exception as e:
                 mb = QMessageBox(self)
                 mb.setIcon(QMessageBox.Icon.Critical)
@@ -1128,14 +1163,7 @@ class RefactorReport(NewReport):
                 mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
                 mb.exec()
                 self.status_label.setText("Ошибка при сохранении JSON.")
-
-
-            data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-
-            # Перезаписываем файл с добавленным результатом
-            with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
+                os.remove(self.json_path)
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
@@ -1166,6 +1194,9 @@ class RefactorReport(NewReport):
                 pass
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
+            self.analysis_finished.emit()
+            #self.close()
+
 
     def get_json_path(self, path):
         self.json_path = path
@@ -1325,17 +1356,23 @@ class AdminNewReport(NewReport):
 
             except Exception as e:
                 print("Ошибка при удалении полей:", e)
-class AnalysisWorker(QObject):
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
 
-    def __init__(self, func):
+
+class AnalysisWorker(QObject):
+    finished = pyqtSignal(object)   # отдадим результат в GUI
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)
+
+    def __init__(self, func, *args, **kwargs):
         super().__init__()
         self.func = func
+        self.args = args
+        self.kwargs = kwargs
 
+    @pyqtSlot()
     def run(self):
         try:
-            self.func()
-            self.finished.emit()
-        except Exception as e:
-            self.error.emit(str(e))
+            result = self.func(*self.args, **self.kwargs)
+            self.finished.emit(result)
+        except Exception:
+            self.error.emit(traceback.format_exc())

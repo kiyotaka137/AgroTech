@@ -1,5 +1,6 @@
 # main.py
 import sys
+import os
 from pathlib import Path
 import json
 from PyQt6 import QtCore
@@ -18,6 +19,8 @@ from PyQt6.QtCore import (
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import NewReport, RefactorReport
+from .report import create_md_webview, write_report_files
+
 from .window_manager import window_manager
 from .api_client import APIClient
 
@@ -70,6 +73,7 @@ class MainWindow(QWidget):
         sidebar_widget.setLayout(sidebar_layout)
         sidebar_widget.setFixedWidth(40)
         sidebar_widget.setObjectName("sidebar")
+
         # ===== Средний бар (История) =====
         history_layout = QVBoxLayout()
         history_layout.setContentsMargins(0, 0, 0, 0)
@@ -152,35 +156,12 @@ class MainWindow(QWidget):
         tabs.addTab(self.ration_stack, "Рацион")
 
         # --- Вкладка Отчет ---
-        self.tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
+        self.tab_report = QWidget() # QTextEdit("Здесь содержимое вкладки 'Отчет'")
         tabs.addTab(self.tab_report, "Отчет")
 
         report_layout.addWidget(tabs)
         report_widget = QWidget()
         report_widget.setLayout(report_layout)
-
-        # # ===== Вкладка анализа =====
-        # self.tab_analysis = QWidget()
-        # analysis_layout = QVBoxLayout(self.tab_analysis)
-        # analysis_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # # GIF
-        # self.gif_label = QLabel()
-        # self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.movie = QMovie("desktop/icons/loading_trans.gif")
-        # self.gif_label.setMovie(self.movie)
-
-        # # Надписи
-        # self.phrase_label = QLabel("Анализ таблицы моделью...")
-        # self.phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # analysis_layout.addWidget(self.gif_label)
-        # analysis_layout.addWidget(self.phrase_label)
-
-        # # Добавляем вкладку в QTabWidget, но изначально выключаем
-        # self.tabs.addTab(self.tab_analysis, "Анализ")
-        # self.analysis_index = self.tabs.indexOf(self.tab_analysis)
-        # self.tabs.setTabEnabled(self.analysis_index, False)
 
         # ===== Сплиттер =====
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -188,7 +169,8 @@ class MainWindow(QWidget):
         splitter.addWidget(report_widget)
         splitter.setHandleWidth(0)
         splitter.setChildrenCollapsible(False)
-        #splitter.setSizes([280, 1060])
+        
+        splitter.setSizes([280, 1060])
 
         # ===== Главный layout =====
         main_layout = QHBoxLayout(self)
@@ -208,7 +190,7 @@ class MainWindow(QWidget):
             return
 
         start_width = self.history_widget.width()
-        end_width = 0 if self.history_widget.isVisible() else 230
+        end_width = 0 if self.history_widget.isVisible() else 260
 
         # Если будем показывать — убедимся, что виджет отображается
         if not self.history_widget.isVisible():
@@ -225,7 +207,7 @@ class MainWindow(QWidget):
         def on_finished():
             if end_width == 0:
                 self.history_widget.hide()
-                self.history_widget.setMaximumWidth(230)  # вернуть ограничение
+                self.history_widget.setMaximumWidth(260)  # вернуть ограничение
 
         self.anim.finished.connect(on_finished)
         self.anim.start()
@@ -380,7 +362,7 @@ class MainWindow(QWidget):
         ration_array = report_data.get("ration_rows", None)
         nutrient_array = report_data.get("nutrients_rows", None)
 
-        #print("массив с рационом",ration_array) #работает
+        #print("массив с рационом",ration_array) # работает
         self.tab_ration_widget.get_json_path(report_file)
         self.tab_ration_widget.load_from_json(ration_array,"left")
         self.tab_ration_widget.load_from_json(nutrient_array,"right")
@@ -416,8 +398,22 @@ class MainWindow(QWidget):
             self.ration_stack.setCurrentIndex(1)
 
         # === Текстовый отчет ===
-        report_text = report_data.get("report", "")
-        self.tab_report.setPlainText(report_text or "")
+        #report_text = report_data.get("report", "")
+        #self.tab_report.setPlainText(report_text or "")
+        try:
+            jsonname = os.path.splitext(os.path.basename(report_file))[0]
+            md_path = "desktop/final_reports/" + jsonname + ".md"
+            if not os.path.exists(md_path):
+                write_report_files(
+                    input_json_path=report_file,
+                    out_report_md=md_path,
+                    update_json_with_report=True,
+                    copy_images=True  # todo: без картинок для серверной части
+                )
+
+            create_md_webview(self.tab_report, md_path)
+        except Exception as e:
+            print(e) # todo: всплывающую ошибку
 
     def on_reports_dir_changed(self, path):
         """

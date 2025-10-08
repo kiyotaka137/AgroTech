@@ -244,71 +244,27 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     return acids_dict
 
 
-def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2), font_path=None, font_size=20):
+def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
     output_dir = name.split('/')[-1][:-5]
-    images = [Image.open(f"{graphics_path}/{output_dir}/{acid}.png") for acid in main_acids]
+
+    images = [Image.open(f"{graphics_path}/{output_dir}/{name}.png") for name in main_acids]
 
     w, h = images[0].size
     cols, rows = grid_size
 
-    # Дополнительное пространство под заголовок
-    title_height = font_size + 10  # немного отступа
-
     grid_w = cols * w + (cols + 1)
-    grid_h = rows * (h + title_height) + (rows + 1)
+    grid_h = rows * h + (rows + 1)
     grid = Image.new("RGB", (grid_w, grid_h), color="white")
-    draw = ImageDraw.Draw(grid)
 
-    # Загрузка шрифта (опционально)
-    try:
-        if font_path and os.path.exists(font_path):
-            font = ImageFont.truetype(font_path, font_size)
-        else:
-            font = ImageFont.load_default()
-    except:
-        font = ImageFont.load_default()
 
-    for idx, (img, acid_name) in enumerate(zip(images, main_acids)):
+    for idx, img in enumerate(images):
         r, c = divmod(idx, cols)
         if r >= rows:
             break
 
-        x = c * w + (c + 1)
-        y = r * (h + title_height) + (r + 1)
-
-        # Рисуем заголовок
-        text_bbox = draw.textbbox((0, 0), acid_name, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_x = x + (w - text_width) // 2
-        draw.text((text_x, y), acid_name, fill="black", font=font)
-
-        # Вставляем изображение ниже заголовка
-        grid.paste(img, (x, y + title_height))
+        grid.paste(img, (w * c, h * r))
 
     grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
-
-
-# def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
-#     output_dir = name.split('/')[-1][:-5]
-#
-#     images = [Image.open(f"{graphics_path}/{output_dir}/{name}.png") for name in main_acids]
-#
-#     w, h = images[0].size
-#     cols, rows = grid_size
-#
-#     grid_w = cols * w + (cols + 1)
-#     grid_h = rows * h + (rows + 1)
-#     grid = Image.new("RGB", (grid_w, grid_h), color="white")
-#
-#
-#     for idx, img in enumerate(images):
-#         r, c = divmod(idx, cols)
-#         if r >= rows:
-#             break
-#
-#         grid.paste(img, (w * c, h * r))
-#
-#     grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
 
 
 if __name__ == '__main__':

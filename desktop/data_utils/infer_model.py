@@ -8,8 +8,9 @@ import re
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
 
-from .llm_infer import llm_cleaning
+#from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
@@ -54,10 +55,10 @@ def extract_to_row(ration, nutrients, json_path):
 
         new_ration.append((clear_elem, val))
 
-    if llm_elems:
-        cleans = llm_cleaning(list(llm_elems.values))
-        for k, v in cleans.items():
-            new_ration[llm_elems[k]][0] = v
+    # if llm_elems:
+    #     cleans = llm_cleaning(list(llm_elems.values))
+    #     for k, v in cleans.items():
+    #         new_ration[llm_elems[k]][0] = v
 
     new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
 
@@ -238,15 +239,81 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         importance = predict_importance_acids(data[0], acid, json_report)
         importance_acid_dict[acid] = importance
 
-    #print(importance_nutri_dict)
-    #print(importance_acid_dict)
+    make_uni_acids(json_report)
 
     return acids_dict
 
 
+def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2), font_path=None, font_size=20):
+    output_dir = name.split('/')[-1][:-5]
+    images = [Image.open(f"{graphics_path}/{output_dir}/{acid}.png") for acid in main_acids]
+
+    w, h = images[0].size
+    cols, rows = grid_size
+
+    # Дополнительное пространство под заголовок
+    title_height = font_size + 10  # немного отступа
+
+    grid_w = cols * w + (cols + 1)
+    grid_h = rows * (h + title_height) + (rows + 1)
+    grid = Image.new("RGB", (grid_w, grid_h), color="white")
+    draw = ImageDraw.Draw(grid)
+
+    # Загрузка шрифта (опционально)
+    try:
+        if font_path and os.path.exists(font_path):
+            font = ImageFont.truetype(font_path, font_size)
+        else:
+            font = ImageFont.load_default()
+    except:
+        font = ImageFont.load_default()
+
+    for idx, (img, acid_name) in enumerate(zip(images, main_acids)):
+        r, c = divmod(idx, cols)
+        if r >= rows:
+            break
+
+        x = c * w + (c + 1)
+        y = r * (h + title_height) + (r + 1)
+
+        # Рисуем заголовок
+        text_bbox = draw.textbbox((0, 0), acid_name, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_x = x + (w - text_width) // 2
+        draw.text((text_x, y), acid_name, fill="black", font=font)
+
+        # Вставляем изображение ниже заголовка
+        grid.paste(img, (x, y + title_height))
+
+    grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
+
+
+# def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
+#     output_dir = name.split('/')[-1][:-5]
+#
+#     images = [Image.open(f"{graphics_path}/{output_dir}/{name}.png") for name in main_acids]
+#
+#     w, h = images[0].size
+#     cols, rows = grid_size
+#
+#     grid_w = cols * w + (cols + 1)
+#     grid_h = rows * h + (rows + 1)
+#     grid = Image.new("RGB", (grid_w, grid_h), color="white")
+#
+#
+#     for idx, img in enumerate(images):
+#         r, c = divmod(idx, cols)
+#         if r >= rows:
+#             break
+#
+#         grid.paste(img, (w * c, h * r))
+#
+#     grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
+
+
 if __name__ == '__main__':
-    print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
-    #print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
-    #                       model_path="models/classic_pipe/acids"))
+    #print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
+    print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
+                           model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

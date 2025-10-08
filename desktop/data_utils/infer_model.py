@@ -160,7 +160,7 @@ def cross_importance(importance_dict):
         print()
 
 
-def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
+def predict_from_file(json_report, model_path="models/classic_pipe"):
     acids_dict = dict()
     importance_acid_dict = dict()
     importance_nutri_dict = dict()

@@ -158,27 +158,3 @@ QToolTip {
     padding: 4px;
     font-size: 12px;
 }
-
-/* === Tabs: без синей линии у активной === */
-QTabWidget::pane {
-    border: none;                 /* чтобы не было общей линии под табами */
-}
-
-QTabBar::tab {
-    border: none;                 /* никаких рамок, в т.ч. снизу */
-    padding: 6px 12px;
-    margin-bottom: 0;             /* не даём «скакать» при выборе */
-    color: #6B7280;               /* цвет неактивной */
-    background: transparent;
-}
-
-QTabBar::tab:selected {
-    border: none;                 /* гарантированно без нижней линии */
-    color: #111827;               /* активная — темнее */
-    background: #F3F4F6;          /* мягкий фон активной (можно убрать) */
-}
-
-QTabBar::tab:hover {
-    background: #E5E7EB;          /* лёгкий hover (опц.) */
-}
-

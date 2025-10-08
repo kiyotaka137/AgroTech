@@ -382,11 +382,11 @@ def predict_nutr():
         shap_val = explainer(X_single)
         shap.plots.waterfall(shap_val[0])
 
-        joblib.dump(pipe_cat, f'../../models/classic_pipe/nutri_explainers/{ind}_explainers.pkl')
+        joblib.dump(explainer, f'../../models/classic_pipe/nutri_explainers/{ind}_explainers.pkl')
 
 
 if __name__ == "__main__":
-    main()
+    #main()
     #gridsearch()
     #params_for_ensamble()
-    #predict_nutr()
+    predict_nutr()

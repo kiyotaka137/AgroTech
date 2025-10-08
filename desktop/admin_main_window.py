@@ -1,7 +1,7 @@
 # main.py
 import sys
 from pathlib import Path
-import json
+
 from PyQt6 import QtCore
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout,
@@ -14,40 +14,40 @@ from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
     QEasingCurve, QThread, pyqtSignal, QObject, QTimer
 )
-
+import json
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
-from .new_report_window import NewReport, RefactorReport
-from .window_manager import window_manager
+from .new_report_window import AdminNewReport
 from .api_client import APIClient
+from .window_manager import window_manager
 
-class MainWindow(QWidget):
+class AdminMainWindow(QWidget):
+
+    return_to_main_requested = pyqtSignal()
     def __init__(self):
         super().__init__()
-
+        self.client = APIClient("http://localhost:8000")
         self.setWindowTitle("Шаблон интерфейса")
         self.setGeometry(100, 100, 1400, 800)
         self.report_loader = ReportLoader()
         self.all_reports = []  # для фильтрации
 
         # Папка с отчетами (меняем в соответствии с твоим текущим расположением)
+        #todo: get_all
         self.reports_dir = Path("desktop/reports")
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
-        # Файловый watcher для автоматического обновления списка
-        self.fs_watcher = QFileSystemWatcher([str(self.reports_dir)])
-        self.fs_watcher.directoryChanged.connect(self.on_reports_dir_changed)
 
         # ===== Сайдбар =====
         sidebar_layout = QVBoxLayout()
         sidebar_layout.setContentsMargins(5, 40, 0, 0)
         sidebar_layout.setSpacing(10)
 
-        self.btn_add_sidebar = QPushButton()
-        self.btn_add_sidebar.setIcon(QIcon("desktop/icons/add_report.png"))
-        self.btn_add_sidebar.setIconSize(QtCore.QSize(26, 26))
-        self.btn_add_sidebar.setFixedSize(32, 32)
-        self.btn_add_sidebar.clicked.connect(self.create_new_report)
+        # self.btn_add_sidebar = QPushButton()
+        # self.btn_add_sidebar.setIcon(QIcon("desktop/icons/add_report.png"))
+        # self.btn_add_sidebar.setIconSize(QtCore.QSize(26, 26))
+        # self.btn_add_sidebar.setFixedSize(32, 32)
+        # self.btn_add_sidebar.clicked.connect(self.create_new_report)
 
         self.btn_load_reports = QPushButton()
         self.btn_load_reports.setIcon(QIcon("desktop/icons/history.png"))
@@ -61,9 +61,16 @@ class MainWindow(QWidget):
         self.btn_admin_keys.setFixedSize(32, 32)
         self.btn_admin_keys.clicked.connect(self.show_access_key_dialog)
 
-        sidebar_layout.addWidget(self.btn_add_sidebar)
+        self.btn_admin_esc = QPushButton()
+        self.btn_admin_esc.setIcon(QIcon("desktop/icons/icons-esc.png"))
+        self.btn_admin_esc.setIconSize(QtCore.QSize(26, 26))
+        self.btn_admin_esc.setFixedSize(32, 32)
+        self.btn_admin_esc.clicked.connect(self.popa)   #сюда вставить выход из админа
+
+        #sidebar_layout.addWidget(self.btn_add_sidebar)
         sidebar_layout.addWidget(self.btn_load_reports)
         sidebar_layout.addWidget(self.btn_admin_keys)
+        sidebar_layout.addWidget(self.btn_admin_esc)
         sidebar_layout.addStretch()
 
         sidebar_widget = QWidget()
@@ -79,13 +86,8 @@ class MainWindow(QWidget):
         header_layout = QHBoxLayout()
         lbl_history = QLabel("История")
         lbl_history.setObjectName("headerLabel")
-
-        btn_add_history = QPushButton()
-        btn_add_history.setIcon(QIcon("desktop/icons/add_report.png"))
-        btn_add_history.setIconSize(QtCore.QSize(22, 22))
-        btn_add_history.setFixedSize(26, 26)
-        btn_add_history.clicked.connect(self.create_new_report)
-
+        
+        
         btn_close_history = QPushButton()
         btn_close_history.setIcon(QIcon("desktop/icons/close_history.png"))
         btn_close_history.setIconSize(QtCore.QSize(22, 22))
@@ -94,7 +96,6 @@ class MainWindow(QWidget):
 
         header_layout.addWidget(lbl_history)
         header_layout.addStretch()
-        header_layout.addWidget(btn_add_history)
         header_layout.addWidget(btn_close_history)
         header_layout.setContentsMargins(2, 8, 2, 0)
         header_layout.setSpacing(0)
@@ -141,7 +142,7 @@ class MainWindow(QWidget):
 
         # --- Вкладка Рацион ---
         # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
-        self.tab_ration_widget = RefactorReport()
+        self.tab_ration_widget = AdminNewReport()
         self.tab_ration_debug = QTextEdit()
         self.tab_ration_debug.setReadOnly(True)
 
@@ -233,83 +234,28 @@ class MainWindow(QWidget):
     def load_reports_to_list(self):
         """Обновляет список отчетов и показывает историю"""
         self.refresh_reports_list()
+
         self.toggle_history()
 
     def refresh_reports_list(self):
         """Обновляет содержимое history_list по текущему состоянию папки reports (без смены видимости)."""
         self.history_list.clear()
-        # Получаем список файлов от loader
-        report_files = self.report_loader.list_reports()
-        # Сохраняем полный список (строки/пути), пригодится для фильтрации
-        self.all_reports = list(report_files)
+        names = self.client.get_all_names()
+        
+        for name in  names:
+            self._add_report_to_list(name)
 
-        # Сортируем по дате модификации (newest first), если есть такая информация
-        try:
-            def key_fn(p):
-                info = self.report_loader.get_report_info(p)
-                return info.get("modified", None) or Path(p).stat().st_mtime
-            report_files_sorted = sorted(report_files, key=key_fn, reverse=True)
-        except Exception:
-            report_files_sorted = list(report_files)
-
-        for report_file in report_files_sorted:
-            self._add_report_to_list(report_file)
-
-    def _add_report_to_list(self, report_file):
+    def _add_report_to_list(self, display_name):
         """
-        Добавляет один отчет в QListWidget.
-        Отображаемое имя: имя_отдел_период (подчёркивания вместо пробелов).
-        В UserRole сохраняется реальный путь/имя файла для надёжной загрузки.
+        Добавляет один элемент в QListWidget с заданным отображаемым именем.
         """
-        # Попытаемся получить мета-инфо через loader
-        info = {}
-        try:
-            info = self.report_loader.load_report(report_file) or {}
-        except Exception:
-            info = {}
-
-
-        # Берём поля, если они есть
-        meta_info = info.get("meta", {})
-        name = meta_info.get("name") if isinstance(info, dict) else None # todo: чекнуть почему срабатывает if снизу и нет норм имени
-        complex_ = meta_info.get("complex") if isinstance(info, dict) else None
-        period = meta_info.get("period") if isinstance(info, dict) else None
-
-
-        # Если полей нет — парсим имя файла (без расширения)
-        if not (name or complex_ or period):
-            stem = Path(report_file).stem
-            parts = stem.split("_")
-            if len(parts) >= 3:
-                name, complex_, period = parts[0], parts[1], "_".join(parts[2:])
-            elif len(parts) == 2:
-                name, complex_ = parts[0], parts[1]
-            else:
-                name = stem
-
-        def norm(s):
-            if s is None:
-                return None
-            s = str(s).strip()
-            if not s:
-                return None
-            return s.replace(" ", "_")
-
-        parts = [p for p in (norm(name), norm(complex_), norm(period)) if p]
-        display_name = "_".join(parts) if parts else Path(report_file).stem
-
-        # форматируем дату
-        #last_time_refactor = self.report_loader.get_report_info(report_file)["modified"]
-        last_time_refactor = str(meta_info.get("created_at"))[:10] # todo: сделать чтоб время после модификации появлялось
-
-
         # Создаём виджет и item
-        widget = ReportListItem(display_name, last_time_refactor)
+        widget = ReportListItem(display_name, "")  # дата оставлена пустой
         item = QListWidgetItem()
         item.setSizeHint(widget.sizeHint())
 
-        # Сохраняем реальный путь/имя файла в UserRole
-        item.setData(Qt.ItemDataRole.UserRole, str(report_file))
+        # Сохраняем отображаемое имя в UserRole (если нужно для логики приложения)
+        item.setData(Qt.ItemDataRole.UserRole, display_name)
 
         self.history_list.addItem(item)
         self.history_list.setItemWidget(item, widget)
@@ -340,7 +286,7 @@ class MainWindow(QWidget):
                 self._add_report_to_list(report_file)
 
     def create_new_report(self):
-        dialog = NewReport(self)
+        dialog = AdminNewReport(self)
 
         dialog.analysis_started.connect(self.show_analysis_tab)
         dialog.analysis_finished.connect(self.finish_analysis)
@@ -349,18 +295,49 @@ class MainWindow(QWidget):
         self.refresh_reports_list()
 
     def display_report(self, item):
+        if item is None:
+            return
+    
+        # Получаем имя записи из UserRole
+        record_name = item.data(Qt.ItemDataRole.UserRole)
+        
+        if not record_name:
+            return
+        
+        # Загружаем данные из базы через клиент
+        report_data = self.client.get_record_by_name(record_name)
+        
+        if not report_data:
+            print(f"Данные для записи '{record_name}' не найдены")
+            return
+
+        # Извлекаем массивы данных
+        ration_array = report_data.get("ration_rows", None)
+        nutrient_array = report_data.get("nutrients_rows", None)
+        report_text = report_data.get("report", "")
+
+        # Загружаем данные в виджеты
+        self.tab_ration_widget.load_from_json(ration_array, "left")
+        self.tab_ration_widget.load_from_json(nutrient_array, "right")
+        self.tab_ration_widget.make_tables_readonly()
+        # Показываем виджет-рацион
+        self.ration_stack.setCurrentIndex(0)
+
+        # Отображаем текстовый отчет
+        self.tab_report.setPlainText(report_text or "")
+        '''
         """
         Загружает и отображает отчёт. Берём реальный путь файла из UserRole.
         item — QListWidgetItem (передаётся сигналом itemClicked).
         """
         if item is None:
             return
-
+        
         report_file = item.data(Qt.ItemDataRole.UserRole)
 
         #print(report_file )# путь находится правильно
         #снизу в комменте какой то бред
-        '''
+        
         if not report_file:
             # fallback: пробуем получить текст из виджета
             widget = self.history_list.itemWidget(item)
@@ -372,7 +349,7 @@ class MainWindow(QWidget):
                 report_file = str(self.reports_dir / f"{report_name}.json")
             except Exception:
                 return
-        '''
+        
         # Попытка загрузить сначала по полному пути, затем по basename(зачем это надо)
         report_data = self.report_loader.load_report(report_file)
         #print(report_data)
@@ -387,7 +364,6 @@ class MainWindow(QWidget):
 
         self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
 
-        '''
         shown = False
 
         # Попробуем загрузить через специализированный метод рациона
@@ -398,7 +374,6 @@ class MainWindow(QWidget):
         except Exception as e:
             print(f"Ошибка при загрузке рациона через load_from_json: {e}")
             shown = False
-        '''
         # fallback: показать сырой текст файла (или repr данных)
         raw = None
         try:
@@ -418,14 +393,15 @@ class MainWindow(QWidget):
         # === Текстовый отчет ===
         report_text = report_data.get("report", "")
         self.tab_report.setPlainText(report_text or "")
-
+    '''
+    '''
     def on_reports_dir_changed(self, path):
         """
         Вызывается QFileSystemWatcher при изменении папки reports.
         Обновляем список с небольшим debounce.
         """
         QtCore.QTimer.singleShot(100, self.refresh_reports_list)
-    
+    '''
 
     def show_access_key_dialog(self):
         """Открывает окно для ввода ключа доступа и проверяет его"""
@@ -455,14 +431,13 @@ class MainWindow(QWidget):
         layout.addWidget(error_label)
         layout.addWidget(confirm_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
+        # ===== Логика проверки =====
         def check_key():
             entered = key_input.text().strip()
             correct_key = "1234"  # <-- здесь можешь заменить на свой ключ
             if entered == correct_key:
                 dialog.accept()
-                window_manager.show_admin_window()
-                #функкция котора отправляет все новые reports
-                send_new_reports()
+                QMessageBox.information(self, "Успех", "Доступ разрешён ✅")
             else:
                 # Выделяем ошибку визуально
                 key_input.setStyleSheet("""
@@ -474,7 +449,6 @@ class MainWindow(QWidget):
                     }
                 """)
                 error_label.setText("Неверный ключ доступа")
-
 
         confirm_btn.clicked.connect(check_key)
 
@@ -498,7 +472,7 @@ class MainWindow(QWidget):
 
     #     # Запускаем GIF
     #     self.movie.start()
-
+    '''
     def show_analysis_tab(self):
         """Добавляет временную вкладку 'Анализ' и показывает гифку"""
         # Прячем существующие вкладки
@@ -545,17 +519,17 @@ class MainWindow(QWidget):
         # Добавляем вкладку
         self.tabs.addTab(self.analysis_tab, "Анализ")
         self.tabs.setCurrentWidget(self.analysis_tab)
-
-
+    '''
+    '''
     def _change_phrase(self):
         """Меняет текст под гифкой"""
         if not hasattr(self, "loading_phrases") or not self.loading_phrases:
             return
         self._phrase_index = (self._phrase_index + 1) % len(self.loading_phrases)
         self.loading_text.setText(self.loading_phrases[self._phrase_index])
-
+    '''
     
-
+    '''
     def finish_analysis(self):
         # Удаляем вкладку анализа, если она есть
         for i in range(self.tabs.count()):
@@ -572,14 +546,15 @@ class MainWindow(QWidget):
             if self.tabs.tabText(i) == "Рацион":
                 self.tabs.setCurrentIndex(i)
                 break
-
-def send_new_reports():
+    '''
+    def popa(self):
+        window_manager.show_main_window()
+def send_new_reports(client: 'APIClient'):
     """
     Читает все JSON файлы из ./records, объединяет их и отправляет на сервер
     одним запросом через client.add_records().
     """
-    client = APIClient("http://localhost:8000")
-    records_path = Path("desktop/reports")
+    records_path = Path("../desktop/reports")
 
     all_records = []
 
@@ -608,6 +583,7 @@ def send_new_reports():
         print("Ошибка при отправке данных на сервер.")
     else:
         print(f"Успешно отправлено {len(all_records)} записей.")
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
@@ -615,6 +591,6 @@ if __name__ == "__main__":
     with open("desktop/styles/styles_light.qss", "r", encoding="utf-8") as f:
         app.setStyleSheet(f.read())
 
-    window = MainWindow()
+    window = AdminMainWindow()
     window.show()
     sys.exit(app.exec())

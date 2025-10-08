@@ -6,6 +6,7 @@ from pathlib import Path
 import shap
 import os
 import re
+import random
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -62,12 +63,12 @@ def extract_to_row(ration, nutrients, json_path):
 
     # Нормализация через LLM тех, кого не распознали
     unknowns = list(llm_elems.keys())
-    # if unknowns:
-    #     cleans = llm_cleaning(unknowns)
-    #     for orig, normalized in cleans.items():
-    #         idx = llm_elems[orig]
-    #         _, old_val = new_ration[idx]
-    #         new_ration[idx] = (normalized, old_val)
+    if unknowns:
+        for orig in unknowns:
+            idx = llm_elems[orig]
+            _, old_val = new_ration[idx]
+            random_name = random.choice(uniq_changed_ration) # к сожалению llm не заработала в связке, вариант чтобы не крашило
+            new_ration[idx] = (random_name, old_val)
 
     # if llm_elems:
     #     cleans = llm_cleaning(list([llm_elems.values]))

@@ -1060,21 +1060,6 @@ class NewReport(QDialog):
     # === JSON API ===
     def load_from_json(self, data, type_of_table):
         """Заполняет таблицу из массива JSON"""
-        '''
-        if type_of_table=="left":
-            self.left_table.setRowCount(0)
-            for row_data in ration_data:
-                self.add_row_for_left_table()
-                row = self.left_table.rowCount() - 1
-                for c in range(2):
-                    value = row_data[c] #if c < len(row_data) else ""
-                    item = self.left_table.item(row, c)
-                    if item:
-                        item.setText(str(value))
-            self.status_label.setText(f"Загружено {len(ration_data)} строк")
-            # Пересчитываем размеры после загрузки данных
-            QTimer.singleShot(0, self.setup_columns_ratio)
-        '''
 
         if type_of_table == "left":
             self.left_table.setRowCount(0)  # Очищаем таблицу
@@ -1135,9 +1120,16 @@ class RefactorReport(NewReport):
         super().__init__(parent)
         self.json_path = None
 
+        #УДАЛИТЬ ИЗ ИНИТА
+        del self.thread
+        del self.worker
+
     def analyze_clicked(self):
         self.analysis_started.emit()
         self.analyze_btn.setEnabled(False)
+
+        self.thread = QThread()
+        self.worker = AnalysisWorker(self._finish_analysis)
 
         self.worker.moveToThread(self.thread)
 
@@ -1157,8 +1149,20 @@ class RefactorReport(NewReport):
         loading_dialog = self._loading_dialog
 
         try:
-            with open(self.json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = {
+                "meta": {
+                    "name": self.name_edit.text(),
+                    "complex": self.complex_edit.text(),
+                    "period": self.period_edit.text(),
+                    "excel": self.excel_path or None,
+                    "created_at": datetime.now().isoformat()
+                },
+                "ration_rows": self._collect_table_data(self.left_table),
+                "nutrients_rows": self._collect_table_data(self.right_table)
+            }
+
+            with open(self.json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
 
             # работа мл моделей
             try:
@@ -1174,22 +1178,31 @@ class RefactorReport(NewReport):
                 )
 
             except Exception as e:
-                mb = QMessageBox(self)
-                mb.setIcon(QMessageBox.Icon.Critical)
-                mb.setWindowTitle("Ошибка")
-                mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
-                mb.exec()
-                self.status_label.setText("Ошибка при сохранении JSON.")
+                print("ошибка в _finish", e)
+                # mb = QMessageBox(self)
+                # mb.setIcon(QMessageBox.Icon.Critical)
+                # mb.setWindowTitle("Ошибка")
+                # mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
+                # mb.exec()
+                # self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(self.json_path)
+
+            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
+            #
+            # # Перезаписываем файл с добавленным результатом
+            # with open(file_path, "w", encoding="utf-8") as f:
+            #     json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
-            mb = QMessageBox(self)
-            mb.setIcon(QMessageBox.Icon.Critical)
-            mb.setWindowTitle("Ошибка")
-            mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            mb.exec()
-            self.status_label.setText("Ошибка при сохранении JSON.")
+            print("ошибка в _finish", e)
+
+            # mb = QMessageBox(self)
+            # mb.setIcon(QMessageBox.Icon.Critical)
+            # mb.setWindowTitle("Ошибка")
+            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
+            # mb.exec()
+            # self.status_label.setText("Ошибка при сохранении JSON.")
 
         finally:
             # Остановим анимацию, если была
@@ -1212,7 +1225,6 @@ class RefactorReport(NewReport):
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
             self.analysis_finished.emit()
-            #self.close()
 
 
     def get_json_path(self, path):

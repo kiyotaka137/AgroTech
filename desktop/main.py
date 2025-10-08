@@ -145,6 +145,12 @@ class MainWindow(QWidget):
         # --- Вкладка Рацион ---
         # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
         self.tab_ration_widget = RefactorReport()
+
+        self.tab_ration_widget.analysis_started.connect(self.show_analysis_tab)
+        self.tab_ration_widget.analysis_finished.connect(self.finish_analysis)
+
+        self.refresh_reports_list()
+
         self.tab_ration_debug = QTextEdit()
         self.tab_ration_debug.setReadOnly(True)
 

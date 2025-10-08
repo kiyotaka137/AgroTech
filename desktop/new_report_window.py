@@ -36,6 +36,139 @@ class NewReport(QDialog):
             pass
         self.setModal(True)
 
+        self.setStyleSheet(self.styleSheet() + """
+        /* === общий фон окна и панелей слева/справа === */
+        #newReportDlg, #container, #paneLeft, #paneRight {
+            background: #F2F3F5; /* подбери HEX под твой базовый фон */
+        }
+
+        /* === фон внутри таблиц (viewport), чтобы пустота не была белой === */
+        #newReportDlg QTableWidget, 
+        #newReportDlg QTableView {
+            background: transparent;   /* само «окно» таблицы прозрачное */
+            border: none;
+        }
+        #newReportDlg QTableWidget::viewport, 
+        #newReportDlg QTableView::viewport {
+            background: #F2F3F5;       /* реальная заливка внутри таблиц */
+        }
+
+        /* === заголовки/угол/выделение (как было) === */
+        #newReportDlg QHeaderView::section {
+            border: 1px solid lightgray;
+            padding: 4px;
+            background-color: #f0f0f0;
+        }
+        #newReportDlg QTableCornerButton::section {
+            background-color: #f0f0f0;
+        }
+        #newReportDlg QTableWidget::item:selected {
+            background-color: #e0e0e0;
+        }
+
+        /* === убрать белую полосу у ручки сплиттера, если есть === */
+        #newReportDlg QSplitter::handle {
+            background: transparent;
+        }
+
+        /* === PRIMARY-кнопка «Анализировать» === */
+        QPushButton[primary="true"] {
+            background: #4DA3FF;
+            color: #ffffff;
+            border: 0px;
+            border-radius: 10px;
+            padding: 10px 24px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        QPushButton[primary="true"]:enabled:hover {
+            background: #5BB0FF;
+        }
+        QPushButton[primary="true"]:enabled:pressed {
+            background: #3B8EF0;
+        }
+        QPushButton[primary="true"]:focus {
+            outline: none;
+            border: 2px solid rgba(61, 131, 255, 0.8);
+        }
+        QPushButton[primary="true"]:disabled {
+            background: #BFD9FF;
+            color: rgba(255,255,255,0.85);
+        }
+        #footer { background: transparent; }  /* ← ДОБАВЬ ЭТУ СТРОКУ */
+        
+        #analyzeBtn {
+            background: #E5E7EB;          /* gray-200 */
+            color: #111827;               /* gray-900 */
+            border: 1px solid #D1D5DB;    /* gray-300 */
+            border-radius: 12px;
+            padding: 12px 28px;
+            font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+            font-weight: 600;
+        }
+        #analyzeBtn:enabled:hover  { background: #D1D5DB; }  /* gray-300 */
+        #analyzeBtn:enabled:pressed{ background: #9CA3AF; }  /* gray-400 */
+        #analyzeBtn:disabled {
+            background: #F3F4F6;          /* gray-100 */
+            color: #6B7280;               /* gray-500 */
+            border-color: #E5E7EB;
+        }
+                           
+        /* Кнопки-пилюли (как #analyzeBtn), но компактнее */
+        QPushButton[pill="true"] {
+            background: #E5E7EB;          /* gray-200 */
+            color: #111827;               /* gray-900 */
+            border: 1px solid #D1D5DB;    /* gray-300 */
+            border-radius: 12px;
+            padding: 8px 20px;            /* компактнее, чем у analyze */
+            font-weight: 600;
+        }
+        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; } /* gray-300 */
+        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; } /* gray-400 */
+        QPushButton[pill="true"]:disabled {
+            background: #F3F4F6;          /* gray-100 */
+            color: #6B7280;               /* gray-500 */
+            border-color: #E5E7EB;
+        }
+        
+        /* Кнопки-пилюли */
+        QPushButton[pill="true"] {
+            background: #E5E7EB;
+            color: #111827;
+            border: 1px solid #D1D5DB;
+            border-radius: 12px;
+            padding: 8px 20px;
+            font-weight: 600;
+        }
+        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; }
+        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; }
+        QPushButton[pill="true"]:disabled {
+            background: #F3F4F6;
+            color: #6B7280;
+            border-color: #E5E7EB;
+        }
+        
+        
+        /*/* Убрать нижнюю линию под вкладками */
+        QTabBar {
+            qproperty-drawBase: 0;   /* отключает рисование базовой линии */
+        }
+        
+        QTabWidget::pane {
+            border: none;            /* на всякий случай убираем рамку панели */
+        }
+        
+        /* Если у табов были свои бордеры — тоже уберём */
+        QTabBar::tab {
+            border: none;
+        }
+
+        QTabWidget {
+            border: none;
+            background: transparent;
+        }*/
+        """)
+
         font = QFont("Segoe UI", 10)
         self.setFont(font)
 

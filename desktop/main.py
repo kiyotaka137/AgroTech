@@ -525,22 +525,6 @@ class MainWindow(QWidget):
         self.tabs.addTab(self.analysis_tab, "Анализ")
         self.tabs.setCurrentWidget(self.analysis_tab)
 
-    # def finish_analysis(self):
-    #     # Обновляем таблицы
-
-    #     # Скрываем вкладку Анализ
-    #     self.tabs.setTabEnabled(self.analysis_index, False)
-
-    #     # Включаем вкладки Рацион и Отчет
-    #     self.tabs.setTabEnabled(self.tabs.indexOf(self.ration_stack), True)
-    #     self.tabs.setTabEnabled(self.tabs.indexOf(self.tab_report), True)
-
-    #     # Переключаемся на вкладку Рацион
-    #     self.tabs.setCurrentIndex(self.tabs.indexOf(self.ration_stack))
-
-    #     # Останавливаем GIF
-    #     self.movie.stop()
-
     def finish_analysis(self):
         # Удаляем вкладку анализа, если она есть
         for i in range(self.tabs.count()):

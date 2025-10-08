@@ -87,8 +87,8 @@ class NewReport(QDialog):
         self._loading_dialog = None
         self._loading_movie = None
 
-        self._build_statusbar()  # <- сначала создаём self.status_label
-        self._build_main()  # <- потом используем его внутри футера
+        self._build_statusbar()  
+        self._build_main()  
 
         # стартовые 5 строк
         for _ in range(5):
@@ -110,30 +110,6 @@ class NewReport(QDialog):
         container.setObjectName("container")
         main_layout = QVBoxLayout(container)
         self.setLayout(main_layout)
-
-        '''# Поля ввода
-        fields_layout = QHBoxLayout()
-        name_lbl = QLabel("Имя:")
-        name_lbl.setFixedWidth(40)
-        self.name_edit = QLineEdit(placeholderText="Введите имя")
-        self.name_edit.setFixedWidth(220)
-
-        complex_lbl = QLabel("Комплекс:")
-        complex_lbl.setFixedWidth(80)
-        self.complex_edit = QLineEdit(placeholderText="Введите комплекс")
-        self.complex_edit.setFixedWidth(220)
-
-        period_lbl = QLabel("Дата:")
-        period_lbl.setFixedWidth(60)
-        self.period_edit = QLineEdit(placeholderText="например: 2025-01")
-        self.period_edit.setFixedWidth(160)
-
-        fields_layout.addWidget(name_lbl); fields_layout.addWidget(self.name_edit)
-        fields_layout.addSpacing(10)
-        fields_layout.addWidget(complex_lbl); fields_layout.addWidget(self.complex_edit)
-        fields_layout.addSpacing(10)
-        fields_layout.addWidget(period_lbl); fields_layout.addWidget(self.period_edit)
-        fields_layout.addStretch() '''
 
         # Поля ввода (одна строка)
         fields_layout = QHBoxLayout()
@@ -168,19 +144,12 @@ class NewReport(QDialog):
         self.pdf_btn = QPushButton("PDF");
         self.pdf_btn.clicked.connect(self.choose_pdf_file)
 
-        # чтобы по высоте совпадало с инпутами
-        btn_h = max(self.name_edit.sizeHint().height(), 28)
-        #self.excel_btn.setFixedHeight(btn_h)
-        #self.pdf_btn.setFixedHeight(btn_h)
-
         head_font = self.font()  # шрифт окна; доступен уже сейчас
 
 
         for b in (self.excel_btn, self.pdf_btn):
             b.setProperty("pill", True)  # тот же селектор, что для нижних
             b.setFont(head_font)
-            #b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
-            #b.setMinimumWidth(92)  # чтобы не схлопывались
             b.setCursor(Qt.CursorShape.PointingHandCursor)
 
             sh = QGraphicsDropShadowEffect(self)
@@ -195,19 +164,6 @@ class NewReport(QDialog):
 
         # добавляем строку в разметку ТЕПЕРЬ, после кнопок
         main_layout.addLayout(fields_layout)
-
-        # Кнопки Excel
-        ''' files_layout = QHBoxLayout()
-        files_layout.addStretch()
-
-        self.excel_btn = QPushButton("Excel"); self.excel_btn.clicked.connect(self.choose_excel_file)
-        self.pdf_btn = QPushButton("PDF"); self.pdf_btn.clicked.connect(self.choose_pdf_file)
-
-        files_layout.addWidget(self.excel_btn)
-        files_layout.addWidget(self.pdf_btn)
-
-        files_layout.addStretch()
-        main_layout.addLayout(files_layout) '''
 
         #контейнеры чтобб разделять на левую и правую часть
         left_container = QWidget()
@@ -249,43 +205,8 @@ class NewReport(QDialog):
         self.right_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         # Стили для таблицы
         self.left_table.setShowGrid(True)
-        '''self.left_table.setStyleSheet("""
-    QTableWidget {
-        gridline-color: lightgray;
-        border: none; 
-        outline: none;
-    }
-    QTableWidget::item {
-        border-bottom: 1px solid lightgray;
-    }
-    QHeaderView::section {
-        border: 1px solid lightgray;
-        padding: 4px;
-        background-color: #f0f0f0;
-    }
-    QTableWidget::item:selected {
-        background-color: #e0e0e0; 
-    }
-""")'''
         self.right_table.setShowGrid(True)
-        '''self.right_table.setStyleSheet("""
-    QTableWidget {
-        gridline-color: lightgray;
-        border: none; 
-        outline: none;
-    }
-    QTableWidget::item {
-        border-bottom: 1px solid lightgray;
-    }
-    QHeaderView::section {
-        border: 1px solid lightgray;
-        padding: 4px;
-        background-color: #f0f0f0;
-    }
-    QTableWidget::item:selected {
-        background-color: #e0e0e0; 
-    }
-""")'''
+
 
         # заполняется начальными значениями правая таблица нутриенов
         for r, nutrient in enumerate(ROWSLEFT):
@@ -297,35 +218,6 @@ class NewReport(QDialog):
             # Первый столбец — фиксированный (нельзя редактировать)
             item_fixed = self.right_table.item(row, 0)
             item_fixed.setFlags(item_fixed.flags() & ~Qt.ItemFlag.ItemIsEditable)
-
-
-        ''''# добавить/удалить  для левой таблицы
-        left_buttons_layout = QHBoxLayout()
-        left_buttons_layout.addWidget(self._make_button("Добавить строку", self.add_row_for_left_table))
-        left_buttons_layout.addWidget(self._make_button("Удалить выделенные", self.remove_selected_for_left_table))
-        left_buttons_layout.addStretch()'''
-
-
-        #сплитер для разделения таблиц
-        # splitter=QSplitter(Qt.Orientation.Horizontal)
-        # left_layout.addWidget(self.left_table)
-        # right_layout.addWidget(self.right_table)
-        
-        # #left_layout.addLayout(left_buttons_layout)
-        # splitter.addWidget(left_container)
-        # splitter.addWidget(right_container)
-
-        # splitter.setHandleWidth(0)           # ручка исчезнет визуально
-        # splitter.setChildrenCollapsible(False)  # запрещает "сплющивание" таблиц
-         
-
-        # # установка соотношения таблиц
-        # splitter.setStretchFactor(0, 6)
-        # splitter.setStretchFactor(1, 6)
-        # main_layout.addWidget(splitter,1)
-
-        # гарантируем, что верх — сплиттер растягивается, низ — фикс
-        #splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         # Контейнер для таблиц
         tables_container = QWidget()
@@ -358,24 +250,9 @@ class NewReport(QDialog):
         # распределяем высоту между элементами главного лэйаута:
         # 0 — строка полей, 1 — сплиттер, 2 — футер, 3 — статусбар
         main_layout.setStretch(0, 0)
-        main_layout.setStretch(1, 1)  # ← основной растягиваемый блок
+        main_layout.setStretch(1, 1)  
         main_layout.setStretch(2, 0)
-        # статусбар добавляется позже, но на всякий:
-        # main_layout.setStretch(3, 0)
 
-        '''# Нижняя полоса слева: "Добавить строку" и "Удалить выделенные"
-        footer_left_layout = QHBoxLayout()
-        footer_left_layout.setContentsMargins(12, 10, 12, 0)  # вровень с нижней областью
-        footer_left_layout.setSpacing(12)
-
-        self.btn_add_row_left = self._make_button("Добавить строку", self.add_row_for_left_table)
-        self.btn_remove_row_left = self._make_button("Удалить выделенные", self.remove_selected_for_left_table)
-
-        footer_left_layout.addWidget(self.btn_add_row_left)
-        footer_left_layout.addWidget(self.btn_remove_row_left)
-        footer_left_layout.addStretch()
-
-        main_layout.addLayout(footer_left_layout) '''
 
         # единый блок: фон под таблицами + стили заголовков + красивая кнопка
         self.setStyleSheet(self.styleSheet() + """
@@ -476,9 +353,6 @@ class NewReport(QDialog):
 
         QTimer.singleShot(0, self.setup_columns_ratio)
 
-        # Кнопка "Анализировать"
-        #analyze_layout = QHBoxLayout()
-        #analyze_layout.addStretch()
         self.analyze_btn = QPushButton("Анализировать")
 
         # Крупнее и жирнее только для этой кнопки
@@ -509,33 +383,7 @@ class NewReport(QDialog):
         shadow.setColor(QColor(0, 0, 0, 60))
         self.analyze_btn.setGraphicsEffect(shadow)
 
-        #self.analyze_btn.setFixedSize(400, 50)
         self.analyze_btn.clicked.connect(self.analyze_clicked)
-        #analyze_layout.addWidget(self.analyze_btn)
-        #analyze_layout.addStretch()
-        #analyze_layout.addStretch()
-        #main_layout.addLayout(analyze_layout)
-
-        '''# нижняя полоса: слева кнопки левой таблицы, справа/по центру — уже созданная self.analyze_btn
-        bottom_layout = QHBoxLayout()
-        bottom_layout.setContentsMargins(12, 10, 12, 10)
-        bottom_layout.setSpacing(12)
-
-        # две кнопки для левой таблицы (переехали вниз)
-        self.btn_add_row_left = self._make_button("Добавить строку", self.add_row_for_left_table)
-        self.btn_remove_row_left = self._make_button("Удалить выделенные", self.remove_selected_for_left_table)
-
-        bottom_layout.addWidget(self.btn_add_row_left)
-        bottom_layout.addWidget(self.btn_remove_row_left)
-
-        bottom_layout.addStretch()
-
-        # НЕ создаём кнопку заново — используем уже существующую self.analyze_btn
-        bottom_layout.addWidget(self.analyze_btn)
-
-        bottom_layout.addStretch()
-
-        main_layout.addLayout(bottom_layout)'''
 
         # 1) Нижняя строка с утилитами слева (атрибут)
         self.bottom_tools_layout = QHBoxLayout()
@@ -617,30 +465,6 @@ class NewReport(QDialog):
         # первый автоподгон футера
         QTimer.singleShot(0, self._fit_footer_by_one_row)
 
-        '''def _lower_footer_by_one_row_safe():
-            try:
-                row_h = self.right_table.verticalHeader().defaultSectionSize()
-
-                footer_layout = self.footer.layout()
-                m = footer_layout.contentsMargins()
-                spacing = footer_layout.spacing()
-
-                # реальные размеры вложенных строк
-                tools_h = bottom_tools_layout.sizeHint().height()
-                center_h = max(bottom_center_layout.sizeHint().height(),
-                               self.analyze_btn.sizeHint().height())
-
-                # минимальная высота, чтобы ничего не обрезалось
-                content_min = m.top() + tools_h + spacing + center_h + m.bottom()
-
-                # целим «опустить границу» на высоту одной строки, но не меньше контента
-                target_h = max(content_min, content_min - row_h)
-
-                self.footer.setFixedHeight(int(target_h))
-            except Exception:
-                pass
-
-        QTimer.singleShot(0, _lower_footer_by_one_row_safe)'''
 
     def _row_px(self) -> int:
         """Реальная высота строки правой таблицы (если нет строк — дефолт секции)."""
@@ -806,11 +630,6 @@ class NewReport(QDialog):
 
                 value_item.setText(fmt(value))
 
-                # Устанавливаем выравнивание и флаги
-                # value_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                # value_item.setFlags(value_item.flags() | Qt.ItemFlag.ItemIsEditable)
-
-
     def choose_excel_file(self):  # todo: после того как будет переделанна функция парсинга пофиксить для двух таблиц
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
         if path:
@@ -856,76 +675,6 @@ class NewReport(QDialog):
                 rows.append(row_data)
 
         return rows
-
-
-    # def analyze_clicked(self):
-    #     """
-    #     При нажатии: показываем модальное окно загрузки (имитация) 5 секунд,
-    #     затем собираем таблицу в JSON и сохраняем файл в папке reports.
-    #     """
-    #     # Отключаем кнопку чтобы избежать повторных нажатий
-    #     self.analyze_btn.setEnabled(False)
-
-    #     # --- Создаём простое модальное окно загрузки с GIF ---
-    #     loading = QDialog(self)
-    #     loading.setWindowTitle("Анализ — загрузка")
-    #     loading.setModal(True)
-    #     loading.setWindowModality(Qt.WindowModality.ApplicationModal)
-    #     loading.resize(360, 180)
-
-    #     layout = QVBoxLayout(loading)
-    #     layout.setContentsMargins(12, 12, 12, 12)
-    #     layout.setSpacing(8)
-
-    #     # Путь к GIF — пробуем несколько мест (корректируй по своему проекту)
-    #     gif_path = "cow.gif"
-    #     movie = None
-    #     try:
-    #         movie = QMovie(str(gif_path))
-    #     except Exception:
-    #         movie = None
-
-    #     gif_label = QLabel()
-    #     gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    #     if movie is not None and movie.isValid():
-    #         # При желании можно задать размер: movie.setScaledSize(QSize(96,96))
-    #         # movie.setScaledSize(QSize(96, 96))
-    #         gif_label.setMovie(movie)
-    #         movie.start()
-    #         # Сохраним в атрибуты, чтобы остановить позже
-    #         self._loading_movie = movie
-    #     else:
-    #         gif_label.setText("Загрузка...\n(анимация недоступна)")
-    #         gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    #     layout.addWidget(gif_label)
-
-    #     # Текст под GIF
-    #     lbl = QLabel("Анализ таблицы моделью...\n(имитация загрузки 5 секунд)")
-    #     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    #     layout.addWidget(lbl)
-
-    #     # Прогресс-бар только для UI (без реальной работы)
-    #     progress = QProgressBar()
-    #     progress.setRange(0, 0)  # бесконечный индикатор
-    #     layout.addWidget(progress)
-
-    #     # Покажем диалог и сохраним ссылку, чтобы закрыть позже
-    #     loading.show()
-    #     self._loading_dialog = loading
-
-    #     # 5 секунд "пустой" работы — placeholder
-    #     #QTimer.singleShot(5000, lambda: self._finish_analysis())
-
-    # def analyze_clicked(self):
-    #     # Сигнал — анализ начался
-    #     self.analysis_started.emit()
-    #     # Отключаем кнопку
-    #     self.analyze_btn.setEnabled(False)
-    #     self.close()
-    #     QTimer.singleShot(100, lambda: self._finish_analysis())
-    #     #self._finish_analysis()
 
     def on_text_changed(self, text):
         # Когда текст вводится — возвращаем прежний стиль
@@ -1016,22 +765,9 @@ class NewReport(QDialog):
                 self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(file_path)
 
-            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-            #
-            # # Перезаписываем файл с добавленным результатом
-            # with open(file_path, "w", encoding="utf-8") as f:
-            #     json.dump(data, f, ensure_ascii=False, indent=2)
-
         except Exception as e:
-            # Используем экземпляр QMessageBox для показа ошибки
             print("ошибка в 2_finish", e)
 
-            # mb = QMessageBox(self)
-            # mb.setIcon(QMessageBox.Icon.Critical)
-            # mb.setWindowTitle("Ошибка")
-            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            # mb.exec()
-            # self.status_label.setText("Ошибка при сохранении JSON.")
 
         finally:
             # Остановим анимацию, если была
@@ -1183,30 +919,12 @@ class RefactorReport(NewReport):
 
             except Exception as e:
                 print("ошибка в _finish", e)
-                # mb = QMessageBox(self)
-                # mb.setIcon(QMessageBox.Icon.Critical)
-                # mb.setWindowTitle("Ошибка")
-                # mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
-                # mb.exec()
-                # self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(self.json_path)
 
-            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-            #
-            # # Перезаписываем файл с добавленным результатом
-            # with open(file_path, "w", encoding="utf-8") as f:
-            #     json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
             print("ошибка в _finish", e)
-
-            # mb = QMessageBox(self)
-            # mb.setIcon(QMessageBox.Icon.Critical)
-            # mb.setWindowTitle("Ошибка")
-            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            # mb.exec()
-            # self.status_label.setText("Ошибка при сохранении JSON.")
 
         finally:
             # Остановим анимацию, если была

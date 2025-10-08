@@ -27,7 +27,8 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Шаблон интерфейса")
+        self.setWindowTitle("Молочный Анализатор")
+        self.setWindowIcon(QIcon("desktop/icons/window_icon.png"))
         self.setGeometry(100, 100, 1400, 800)
         self.report_loader = ReportLoader()
         self.all_reports = []  # для фильтрации
@@ -361,18 +362,7 @@ class MainWindow(QWidget):
 
         self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
 
-        '''
-        shown = False
 
-        # Попробуем загрузить через специализированный метод рациона
-        try:
-            if ration_array is not None and hasattr(self.tab_ration_widget, "load_from_json"):
-                
-                shown = True
-        except Exception as e:
-            print(f"Ошибка при загрузке рациона через load_from_json: {e}")
-            shown = False
-        '''
         # fallback: показать сырой текст файла (или repr данных)
         raw = None
         try:

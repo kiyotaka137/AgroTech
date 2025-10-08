@@ -9,15 +9,12 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QLineEdit, QLabel, QAbstractItemView, QComboBox, QFileDialog,
-    QHeaderView, QSizePolicy, QProgressBar,QSplitter
+    QHeaderView, QSizePolicy, QProgressBar,QSplitter, QGraphicsDropShadowEffect
 )
-from PyQt6.QtGui import QFont, QMovie, QColor
+from PyQt6.QtGui import QFont, QMovie, QColor, QFontDatabase
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
-from PyQt6.QtGui import QFontDatabase
-from pathlib import Path
-
-from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
 
@@ -27,8 +24,8 @@ COLUMNSRIGHT=["Нутриент","СВ"]
 
 
 class NewReport(QDialog):
-
-    analysis_started = pyqtSignal(dict)
+    analysis_started = pyqtSignal()
+    analysis_finished = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,6 +44,9 @@ class NewReport(QDialog):
 
         # ===== Надёжная загрузка Inter независимо от рабочей директории =====
         self._inter_family = None
+
+        self.thread = QThread()
+        self.worker = AnalysisWorker(self._finish_analysis)
 
         def _try_load_inter() -> str | None:
             """Вернёт имя гарнитуры Inter если шрифт удалось подключить, иначе None."""
@@ -138,24 +138,24 @@ class NewReport(QDialog):
         name_lbl = QLabel("Имя:");
         name_lbl.setFixedWidth(40)
         self.name_edit = QLineEdit(placeholderText="Введите имя");
-        self.name_edit.setFixedWidth(220)
+        self.name_edit.setFixedWidth(160)
 
         complex_lbl = QLabel("Комплекс:");
         complex_lbl.setFixedWidth(80)
         self.complex_edit = QLineEdit(placeholderText="Введите комплекс");
-        self.complex_edit.setFixedWidth(220)
+        self.complex_edit.setFixedWidth(160)
 
         period_lbl = QLabel("Дата:");
         period_lbl.setFixedWidth(60)
         self.period_edit = QLineEdit(placeholderText="например: 2025-01");
-        self.period_edit.setFixedWidth(160)
+        self.period_edit.setFixedWidth(120)
 
         fields_layout.addWidget(name_lbl);
         fields_layout.addWidget(self.name_edit)
-        fields_layout.addSpacing(10)
+        fields_layout.addSpacing(8)
         fields_layout.addWidget(complex_lbl);
         fields_layout.addWidget(self.complex_edit)
-        fields_layout.addSpacing(10)
+        fields_layout.addSpacing(8)
         fields_layout.addWidget(period_lbl);
         fields_layout.addWidget(self.period_edit)
 
@@ -177,18 +177,15 @@ class NewReport(QDialog):
         for b in (self.excel_btn, self.pdf_btn):
             b.setProperty("pill", True)  # тот же селектор, что для нижних
             b.setFont(head_font)
-            b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
-            b.setMinimumWidth(92)  # чтобы не схлопывались
+            #b.setMinimumHeight(34)  # компактнее для верхней панели (можно 32–36)
+            #b.setMinimumWidth(92)  # чтобы не схлопывались
             b.setCursor(Qt.CursorShape.PointingHandCursor)
 
             sh = QGraphicsDropShadowEffect(self)
-            sh.setBlurRadius(18)
+            sh.setBlurRadius(4)
             sh.setOffset(0, 2)
             sh.setColor(QColor(0, 0, 0, 40))
             b.setGraphicsEffect(sh)
-
-        self.excel_btn.setMinimumWidth(72)  # ← ДОБАВЬ: чтобы кнопки не «схлопывались»
-        self.pdf_btn.setMinimumWidth(72)  # ← ДОБАВЬ
 
         fields_layout.addSpacing(8)
         fields_layout.addWidget(self.excel_btn)
@@ -196,8 +193,6 @@ class NewReport(QDialog):
 
         # добавляем строку в разметку ТЕПЕРЬ, после кнопок
         main_layout.addLayout(fields_layout)
-
-        #main_layout.addLayout(fields_layout)
 
         # Кнопки Excel
         ''' files_layout = QHBoxLayout()
@@ -217,7 +212,7 @@ class NewReport(QDialog):
         left_layout = QVBoxLayout(left_container)
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
-
+        
         for _pane in (left_container, right_container):
             _pane.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
@@ -310,20 +305,53 @@ class NewReport(QDialog):
 
 
         #сплитер для разделения таблиц
-        splitter=QSplitter(Qt.Orientation.Horizontal)
-        left_layout.addWidget(self.left_table)
-        right_layout.addWidget(self.right_table)
-        #left_layout.addLayout(left_buttons_layout)
-        splitter.addWidget(left_container)
-        splitter.addWidget(right_container)
+        # splitter=QSplitter(Qt.Orientation.Horizontal)
+        # left_layout.addWidget(self.left_table)
+        # right_layout.addWidget(self.right_table)
+        
+        # #left_layout.addLayout(left_buttons_layout)
+        # splitter.addWidget(left_container)
+        # splitter.addWidget(right_container)
 
-        # установка соотношения таблиц
-        splitter.setStretchFactor(0, 6)
-        splitter.setStretchFactor(1, 6)
-        main_layout.addWidget(splitter,1)
+        # splitter.setHandleWidth(0)           # ручка исчезнет визуально
+        # splitter.setChildrenCollapsible(False)  # запрещает "сплющивание" таблиц
+         
+
+        # # установка соотношения таблиц
+        # splitter.setStretchFactor(0, 6)
+        # splitter.setStretchFactor(1, 6)
+        # main_layout.addWidget(splitter,1)
 
         # гарантируем, что верх — сплиттер растягивается, низ — фикс
-        splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        #splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Контейнер для таблиц
+        tables_container = QWidget()
+        tables_layout = QHBoxLayout(tables_container)
+        tables_layout.setContentsMargins(0, 0, 0, 0)
+        tables_layout.setSpacing(16)  # расстояние между таблицами
+
+        #Блокируем горизонтальную промотку
+        self.left_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.left_table.horizontalScrollBar().setDisabled(True)
+
+        self.right_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.right_table.horizontalScrollBar().setDisabled(True)
+
+        # Добавляем таблицы
+        tables_layout.addWidget(self.left_table)
+        tables_layout.addWidget(self.right_table)
+
+        # Определяем растяжение, чтобы обе таблицы занимали равные части
+        tables_layout.setStretch(0, 6)  # левая таблица
+        tables_layout.setStretch(1, 6)  # правая таблица
+
+        # Добавляем контейнер с таблицами в основной layout
+        main_layout.addWidget(tables_container, 1)
+
+        # Гарантируем, что контейнер растягивается
+        tables_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
 
         # распределяем высоту между элементами главного лэйаута:
         # 0 — строка полей, 1 — сплиттер, 2 — футер, 3 — статусбар
@@ -432,7 +460,7 @@ class NewReport(QDialog):
             color: #111827;               /* gray-900 */
             border: 1px solid #D1D5DB;    /* gray-300 */
             border-radius: 12px;
-            padding: 8px 20px;            /* компактнее, чем у analyze */
+            padding: 8px 10px;            /* компактнее, чем у analyze */
             font-weight: 600;
         }
         QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; } /* gray-300 */
@@ -442,45 +470,6 @@ class NewReport(QDialog):
             color: #6B7280;               /* gray-500 */
             border-color: #E5E7EB;
         }
-        
-        /* Кнопки-пилюли */
-        QPushButton[pill="true"] {
-            background: #E5E7EB;
-            color: #111827;
-            border: 1px solid #D1D5DB;
-            border-radius: 12px;
-            padding: 8px 20px;
-            font-weight: 600;
-        }
-        QPushButton[pill="true"]:enabled:hover  { background: #D1D5DB; }
-        QPushButton[pill="true"]:enabled:pressed{ background: #9CA3AF; }
-        QPushButton[pill="true"]:disabled {
-            background: #F3F4F6;
-            color: #6B7280;
-            border-color: #E5E7EB;
-        }
-        
-        
-        /* Убрать нижнюю линию под вкладками */
-        QTabBar {
-            qproperty-drawBase: 0;   /* отключает рисование базовой линии */
-        }
-        
-        QTabWidget::pane {
-            border: none;            /* на всякий случай убираем рамку панели */
-        }
-        
-        /* Если у табов были свои бордеры — тоже уберём */
-        QTabBar::tab {
-            border: none;
-        }
-
-        QTabWidget {
-            border: none;
-            background: transparent;
-        }
-
-          
         """)
 
         QTimer.singleShot(0, self.setup_columns_ratio)
@@ -667,10 +656,13 @@ class NewReport(QDialog):
         m = footer_layout.contentsMargins()
         spacing = footer_layout.spacing()
 
-        tools_h = self.bottom_tools_layout.sizeHint().height()
-        center_h = max(self.bottom_center_layout.sizeHint().height(),
-                       self.analyze_btn.sizeHint().height())
-        status_h = self.status_label.sizeHint().height()
+        tools_h = self.bottom_tools_layout.sizeHint().height() if getattr(self, "bottom_tools_layout", None) is not None else 0
+
+        center_layout_h = self.bottom_center_layout.sizeHint().height() if getattr(self, "bottom_center_layout", None) is not None else 0
+        analyze_h = self.analyze_btn.sizeHint().height() if getattr(self, "analyze_btn", None) is not None else 0
+        center_h = max(center_layout_h, analyze_h)
+
+        status_h = self.status_label.sizeHint().height() if getattr(self, "status_label", None) is not None else 0
 
         content_min = m.top() + tools_h + spacing + center_h + spacing + status_h + m.bottom()
 
@@ -863,65 +855,97 @@ class NewReport(QDialog):
         return rows
 
 
+    # def analyze_clicked(self):
+    #     """
+    #     При нажатии: показываем модальное окно загрузки (имитация) 5 секунд,
+    #     затем собираем таблицу в JSON и сохраняем файл в папке reports.
+    #     """
+    #     # Отключаем кнопку чтобы избежать повторных нажатий
+    #     self.analyze_btn.setEnabled(False)
+
+    #     # --- Создаём простое модальное окно загрузки с GIF ---
+    #     loading = QDialog(self)
+    #     loading.setWindowTitle("Анализ — загрузка")
+    #     loading.setModal(True)
+    #     loading.setWindowModality(Qt.WindowModality.ApplicationModal)
+    #     loading.resize(360, 180)
+
+    #     layout = QVBoxLayout(loading)
+    #     layout.setContentsMargins(12, 12, 12, 12)
+    #     layout.setSpacing(8)
+
+    #     # Путь к GIF — пробуем несколько мест (корректируй по своему проекту)
+    #     gif_path = "cow.gif"
+    #     movie = None
+    #     try:
+    #         movie = QMovie(str(gif_path))
+    #     except Exception:
+    #         movie = None
+
+    #     gif_label = QLabel()
+    #     gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    #     if movie is not None and movie.isValid():
+    #         # При желании можно задать размер: movie.setScaledSize(QSize(96,96))
+    #         # movie.setScaledSize(QSize(96, 96))
+    #         gif_label.setMovie(movie)
+    #         movie.start()
+    #         # Сохраним в атрибуты, чтобы остановить позже
+    #         self._loading_movie = movie
+    #     else:
+    #         gif_label.setText("Загрузка...\n(анимация недоступна)")
+    #         gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    #     layout.addWidget(gif_label)
+
+    #     # Текст под GIF
+    #     lbl = QLabel("Анализ таблицы моделью...\n(имитация загрузки 5 секунд)")
+    #     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    #     layout.addWidget(lbl)
+
+    #     # Прогресс-бар только для UI (без реальной работы)
+    #     progress = QProgressBar()
+    #     progress.setRange(0, 0)  # бесконечный индикатор
+    #     layout.addWidget(progress)
+
+    #     # Покажем диалог и сохраним ссылку, чтобы закрыть позже
+    #     loading.show()
+    #     self._loading_dialog = loading
+
+    #     # 5 секунд "пустой" работы — placeholder
+    #     #QTimer.singleShot(5000, lambda: self._finish_analysis())
+
+    # def analyze_clicked(self):
+    #     # Сигнал — анализ начался
+    #     self.analysis_started.emit()
+    #     # Отключаем кнопку
+    #     self.analyze_btn.setEnabled(False)
+    #     self.close()
+    #     QTimer.singleShot(100, lambda: self._finish_analysis())
+    #     #self._finish_analysis()
+
     def analyze_clicked(self):
-        """
-        При нажатии: показываем модальное окно загрузки (имитация) 5 секунд,
-        затем собираем таблицу в JSON и сохраняем файл в папке reports.
-        """
-        # Отключаем кнопку чтобы избежать повторных нажатий
+        self.analysis_started.emit()
         self.analyze_btn.setEnabled(False)
+        self.close()
+        
+        self.worker.moveToThread(self.thread)
 
-        # --- Создаём простое модальное окно загрузки с GIF ---
-        loading = QDialog(self)
-        loading.setWindowTitle("Анализ — загрузка")
-        loading.setModal(True)
-        loading.setWindowModality(Qt.WindowModality.ApplicationModal)
-        loading.resize(360, 180)
+        # Подключаем сигналы
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.error.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
 
-        layout = QVBoxLayout(loading)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        # Запускаем
+        self.thread.start()
 
-        # Путь к GIF — пробуем несколько мест (корректируй по своему проекту)
-        gif_path = "cow.gif"
-        movie = None
-        try:
-            movie = QMovie(str(gif_path))
-        except Exception:
-            movie = None
-
-        gif_label = QLabel()
-        gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        if movie is not None and movie.isValid():
-            # При желании можно задать размер: movie.setScaledSize(QSize(96,96))
-            # movie.setScaledSize(QSize(96, 96))
-            gif_label.setMovie(movie)
-            movie.start()
-            # Сохраним в атрибуты, чтобы остановить позже
-            self._loading_movie = movie
-        else:
-            gif_label.setText("Загрузка...\n(анимация недоступна)")
-            gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        layout.addWidget(gif_label)
-
-        # Текст под GIF
-        lbl = QLabel("Анализ таблицы моделью...\n(имитация загрузки 5 секунд)")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl)
-
-        # Прогресс-бар только для UI (без реальной работы)
-        progress = QProgressBar()
-        progress.setRange(0, 0)  # бесконечный индикатор
-        layout.addWidget(progress)
-
-        # Покажем диалог и сохраним ссылку, чтобы закрыть позже
-        loading.show()
-        self._loading_dialog = loading
-
-        # 5 секунд "пустой" работы — placeholder
-        #QTimer.singleShot(5000, lambda: self._finish_analysis())
+    def _analysis_error(self, msg):
+        QMessageBox.critical(self, "Ошибка", f"Проблема с анализом:\n{msg}")
+        self.analyze_btn.setEnabled(True)
+        self.analysis_finished.emit()
+              
 
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
@@ -1002,7 +1026,8 @@ class NewReport(QDialog):
                 pass
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
-            self.close()
+            self.analysis_finished.emit()
+            #self.close()
 
 
     # === JSON API ===
@@ -1153,3 +1178,172 @@ class RefactorReport(NewReport):
     def get_json_path(self, path):
         self.json_path = path
 
+class AdminNewReport(NewReport):
+    """
+    Вариант окна, где удалены/скрыты кнопки:
+      - Excel, PDF (верхняя панель)
+      - Добавить строку, Удалить выделенные (нижняя панель)
+      - Анализировать (центральная кнопка)
+    Реализовано через наследование: после инициализации базового окна
+    скрываем/удаляем виджеты и корректируем footer.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+
+      
+        # Список имен атрибутов-кнопок, которые нужно скрыть/удалить
+        btn_names = [
+            "excel_btn", "pdf_btn",
+            "btn_add_row_left", "btn_remove_row_left",
+            "analyze_btn"
+        ]
+
+        # Скрываем кнопки, если они существуют
+        for name in btn_names:
+            w = getattr(self, name, None)
+            if w is not None:
+                try:
+                    w.hide()
+                except Exception:
+                    pass
+                # разорвать связь с layout'ом (если нужно)
+                try:
+                    w.setParent(None)
+                except Exception:
+                    pass
+                # убрать ссылку чтобы GC мог убрать (по желанию)
+                try:
+                    delattr(self, name)
+                except Exception:
+                    # если delattr не работает (например, свойство не найдено) — игнорируем
+                    pass
+
+        # Если присутствуют layout'ы нижней панели — очистим их (убираем пустые места)
+        try:
+            if hasattr(self, "bottom_tools_layout"):
+                # извлекаем все элементы и удаляем из layout'а
+                l = self.bottom_tools_layout
+                for i in reversed(range(l.count())):
+                    it = l.takeAt(i)
+                    if it:
+                        w = it.widget()
+                        if w:
+                            try:
+                                w.setParent(None)
+                            except Exception:
+                                pass
+            if hasattr(self, "bottom_center_layout"):
+                l = self.bottom_center_layout
+                for i in reversed(range(l.count())):
+                    it = l.takeAt(i)
+                    if it:
+                        w = it.widget()
+                        if w:
+                            try:
+                                w.setParent(None)
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
+        # Оставим только статус в футере — подгоняем высоту
+        try:
+            # переместим статус (если ещё не перемещён)
+            if hasattr(self, "status_label") and self.status_label.parent() is not self.footer:
+                self.status_label.setParent(self.footer)
+            # починим отступы футера
+            if hasattr(self, "footer") and self.footer is not None:
+                footer_layout = self.footer.layout()
+                if footer_layout is not None:
+                    footer_layout.setContentsMargins(12, 4, 12, 4)
+                    footer_layout.setSpacing(4)
+                    # удалим всё кроме status_label
+                    # сначала соберём, что в лэйауте
+                    for i in reversed(range(footer_layout.count())):
+                        item = footer_layout.itemAt(i)
+                        if item:
+                            widget = item.widget()
+                            # оставим только статус (по объекту сравнения)
+                            if widget is not None and widget is not self.status_label:
+                                footer_layout.removeWidget(widget)
+                                try:
+                                    widget.setParent(None)
+                                except Exception:
+                                    pass
+                    # затем добавим статус_label в конец, если нужно
+                    if self.status_label.parent() is not self.footer:
+                        footer_layout.addWidget(self.status_label)
+            # финальная подгонка
+            QTimer.singleShot(0, self._fit_footer_by_one_row)
+        except Exception:
+            pass
+
+        # Если хотите, можно и полностью удалить метод analyze_clicked у экземпляра:
+        try:
+            if hasattr(self, "analyze_btn") is False:
+                # если analyze_btn удалён, то де-факто кнопки нет — но чтобы быть уверенным,
+                # можем подменить метод на no-op
+                self.analyze_clicked = lambda *a, **k: None
+        except Exception:
+            pass
+
+        QTimer.singleShot(0,self._remove_name_complex_date_fields)
+    def _remove_name_complex_date_fields(self):
+            """Безопасно удаляет QLabel и QLineEdit 'Имя', 'Комплекс', 'Дата'."""
+            try:
+                # найдём layout, где лежат поля и подписи
+                fields_layout = None
+                if hasattr(self, "name_edit"):
+                    parent = self.name_edit.parent()
+                    if parent:
+                        # ищем QHBoxLayout, где находится name_edit
+                        layout = parent.layout()
+                        if layout:
+                            for i in range(layout.count()):
+                                item = layout.itemAt(i)
+                                sub = item.layout()
+                                if sub and isinstance(sub, QHBoxLayout):
+                                    # нашли тот, где поля и QLabel
+                                    for j in range(sub.count()):
+                                        w = sub.itemAt(j).widget()
+                                        if w is self.name_edit:
+                                            fields_layout = sub
+                                            break
+                            if fields_layout is None and isinstance(layout, QHBoxLayout):
+                                # fallback — может это и есть fields_layout
+                                fields_layout = layout
+
+                if fields_layout is None:
+                    return  # не нашли — просто выходим
+
+                # Удаляем из fields_layout все QLabel и QLineEdit с нужным текстом
+                for i in reversed(range(fields_layout.count())):
+                    item = fields_layout.itemAt(i)
+                    w = item.widget()
+                    if not w:
+                        continue
+                    if isinstance(w, QLineEdit):
+                        fields_layout.removeWidget(w)
+                        w.deleteLater()
+                    elif isinstance(w, QLabel) and w.text().strip(":") in ("Имя", "Комплекс", "Дата"):
+                        fields_layout.removeWidget(w)
+                        w.deleteLater()
+
+            except Exception as e:
+                print("Ошибка при удалении полей:", e)
+class AnalysisWorker(QObject):
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, func):
+        super().__init__()
+        self.func = func
+
+    def run(self):
+        try:
+            self.func()
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))

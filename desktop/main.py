@@ -10,10 +10,10 @@ from PyQt6.QtWidgets import (
     QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
     QStackedWidget, QDialog, QMessageBox
 )
-from PyQt6.QtGui import QIcon, QMovie
+from PyQt6.QtGui import QIcon, QMovie, QFont
 from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
-    QEasingCurve, QThread, pyqtSignal, QObject, QTimer
+    QEasingCurve, QThread, pyqtSignal, QObject, QTimer, QSize
 )
 
 from .report_loader import ReportLoader
@@ -509,17 +509,25 @@ class MainWindow(QWidget):
         self.analysis_tab = QWidget()
         layout = QVBoxLayout(self.analysis_tab)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(25)
 
-        # Гифка
+        # Гифка — уменьшим размер
         gif_label = QLabel()
-        movie = QMovie("desktop/icons/loading_trans.gif")  # путь к гифке
+        movie = QMovie("desktop/icons/loading_trans.gif")
+        movie.setScaledSize(QSize(192, 96))  # <-- уменьшили гифку
         gif_label.setMovie(movie)
         movie.start()
-        layout.addWidget(gif_label)
+        layout.addWidget(gif_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Надпись
+        # Надпись — крупный и мягкий шрифт
         self.loading_text = QLabel("Нейросети думают 🧠")
         self.loading_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font = QFont("Segoe UI", 14, QFont.Weight.Medium)
+        self.loading_text.setFont(font)
+        self.loading_text.setStyleSheet("""
+            color: #1F2937;      /* gray-800 */
+            padding-top: 8px;
+        """)
         layout.addWidget(self.loading_text)
 
         # Фразы
@@ -536,7 +544,7 @@ class MainWindow(QWidget):
         # Таймер для смены фраз
         self.phrase_timer = QTimer(self)
         self.phrase_timer.timeout.connect(self._change_phrase)
-        self.phrase_timer.start(2000)
+        self.phrase_timer.start(2200)
 
         # Добавляем вкладку
         self.tabs.addTab(self.analysis_tab, "Анализ")

@@ -11,9 +11,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
-#from .llm_infer import llm_cleaning
+# from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
-from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
+from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict, nutri_reverse
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
 
 
@@ -146,29 +146,31 @@ def predict_importance_acids(data, acid, name,
             else:
                 amount_of_neg += 1
 
-    output_dir = name.split('/')[-1][:-5]
-    print(output_dir)
-    if not os.path.exists(f"{graphics_path}/{output_dir}"):
-        os.makedirs(f"{graphics_path}/{output_dir}")
+    if acid in main_acids:
+        output_dir = name.split('/')[-1][:-5]
+        print(output_dir)
+        if not os.path.exists(f"{graphics_path}/{output_dir}"):
+            os.makedirs(f"{graphics_path}/{output_dir}")
 
-    shap.plots.waterfall(shap_values[0])
-    plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
-    plt.close()
+        shap.plots.waterfall(shap_values[0])
+        plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
+        plt.close()
 
-    with open(name, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
-        if "graphics" not in json_data:
-            json_data["graphics"] = {}
+        with open(name, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+            if "graphics" not in json_data:
+                json_data["graphics"] = {}
 
-        json_data["graphics"][acid] = str(Path(f"{graphics_path}/{output_dir}/{acid}.png").resolve())
+            json_data["graphics"][acid] = str(Path(f"{graphics_path}/{output_dir}/{acid}.png").resolve())
 
-    with open(name, "w", encoding="utf-8") as f:
-        json.dump(json_data, f, ensure_ascii=False, indent=2)
+        with open(name, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, ensure_ascii=False, indent=2)
 
     return feature_val_dict
 
 
-def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
+def predict_importance_nutri(data, list_of_main_nutri, name,
+                             nutri_path="models/classic_pipe/nutri",
                              importance_path="models/classic_pipe/nutri_explainers",
                              graphics_path="desktop/graphics"):
     nutri_dict = dict()
@@ -211,23 +213,24 @@ def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
 
         nutri_dict[item] = feature_val_dict
 
-        output_dir = name.split('/')[-1][:-5]
-        if not os.path.exists(f"{graphics_path}/{output_dir}"):
-            os.makedirs(f"{graphics_path}/{output_dir}")
+        if item in list_of_main_nutri:
+            output_dir = name.split('/')[-1][:-5]
+            if not os.path.exists(f"{graphics_path}/{output_dir}"):
+                os.makedirs(f"{graphics_path}/{output_dir}")
 
-        shap.plots.waterfall(shap_values[0])
-        plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
-        plt.close()
+            shap.plots.waterfall(shap_values[0])
+            plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
+            plt.close()
 
-        with open(name, "r", encoding="utf-8") as f:
-            json_data = json.load(f)
-            if "graphics" not in json_data:
-                json_data["graphics"] = {}
-            json_data["graphics"][key] = str(Path(f"{graphics_path}/{output_dir}/{key}.png").resolve())
+            with open(name, "r", encoding="utf-8") as f:
+                json_data = json.load(f)
+                if "graphics" not in json_data:
+                    json_data["graphics"] = {}
+                json_data["graphics"][key] = str(Path(f"{graphics_path}/{output_dir}/{key}.png").resolve())
 
 
-        with open(name, "w", encoding="utf-8") as f:
-            json.dump(json_data, f, ensure_ascii=False, indent=2)
+            with open(name, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, ensure_ascii=False, indent=2)
 
     return nutri_dict
 
@@ -240,49 +243,6 @@ def cross_importance(importance_dict):
             if ind == 5: break
             print(f"{sec_key} - {sec_item}", end="|")
         print()
-
-
-def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
-    json_report = str(json_report)
-    acids_dict = dict()
-    importance_acid_dict = dict()
-    importance_nutri_dict = dict()
-
-    data = load_data_from_json(json_report)
-    data = clear_data(data)
-
-    print(json_report)
-    importance_nutri_dict = predict_importance_nutri(data, json_report)
-
-    data = data.to_numpy()
-
-    for acid in acids:
-        model = jl.load(f"{model_path}/{acid}_ensemble.pkl")
-        logit = model.predict(data)
-        acids_dict[acid] = logit
-
-        set_ensemble(model)
-        importance = predict_importance_acids(data[0], acid, json_report)
-        importance_acid_dict[acid] = importance
-
-    # print(importance_nutri_dict)
-    # print(importance_acid_dict)
-    make_uni_acids(json_report)
-
-    with open(json_report, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
-        json_data["importance_acid"] = importance_acid_dict
-        json_data["importance_nutrient"] = importance_nutri_dict
-        json_data["result_acids"] = {
-            k: float(v[0])
-            for k, v in acids_dict.items()
-        }
-
-
-    with open(json_report, "w", encoding="utf-8") as f:
-        json.dump(json_data, f, ensure_ascii=False, indent=2)
-
-    return acids_dict
 
 
 def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
@@ -307,6 +267,74 @@ def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
 
     grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
 
+
+def make_uni_nutri(name, list_of_main_nutri, graphics_path="desktop/graphics", grid_size=(2, 2)):
+    output_dir = name.split('/')[-1][:-5]
+
+    images = [Image.open(f"{graphics_path}/{output_dir}/{nutri_reverse[name]}.png") for name in list_of_main_nutri]
+
+    w, h = images[0].size
+    cols, rows = grid_size
+
+    grid_w = cols * w + (cols + 1)
+    grid_h = rows * h + (rows + 1)
+    grid = Image.new("RGB", (grid_w, grid_h), color="white")
+
+
+    for idx, img in enumerate(images):
+        r, c = divmod(idx, cols)
+        if r >= rows:
+            break
+
+        grid.paste(img, (w * c, h * r))
+
+    grid.save(f"{graphics_path}/{output_dir}/uni_nutri.png")
+
+
+def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
+    json_report = str(json_report)
+    acids_dict = dict()
+    importance_acid_dict = dict()
+    importance_nutri_dict = dict()
+    list_of_main_nutri = list()
+
+    data = load_data_from_json(json_report)
+    data = clear_data(data)
+
+    for acid in acids:
+        model = jl.load(f"{model_path}/{acid}_ensemble.pkl")
+        logit = model.predict(data.to_numpy())
+        acids_dict[acid] = logit
+
+        set_ensemble(model)
+        importance = predict_importance_acids(data.to_numpy()[0], acid, json_report)
+        importance_acid_dict[acid] = importance
+
+    for acid in main_acids:
+        for key, item in importance_acid_dict[acid].items():
+            if (key not in nutri_for_predict) or (key in list_of_main_nutri):
+                continue
+            list_of_main_nutri.append(key)
+            break
+
+    importance_nutri_dict = predict_importance_nutri(data, list_of_main_nutri, json_report)
+
+    make_uni_acids(json_report)
+    make_uni_nutri(json_report, list_of_main_nutri)
+
+    with open(json_report, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+        json_data["importance_acid"] = importance_acid_dict
+        json_data["importance_nutrient"] = importance_nutri_dict
+        json_data["result_acids"] = {
+            k: float(v[0])
+            for k, v in acids_dict.items()
+        }
+
+    with open(json_report, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, ensure_ascii=False, indent=2)
+
+    return acids_dict
 
 
 if __name__ == '__main__':

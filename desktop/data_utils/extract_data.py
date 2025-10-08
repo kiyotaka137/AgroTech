@@ -2,68 +2,265 @@ from PyPDF2 import PdfReader
 import pandas as pd
 import numpy as np
 import re
+import xlrd
 from typing import List, Tuple, Sequence, Optional, Dict, Any
 
 
 COLUMNS = ['Ингредиенты', 'СВ %', 'ГП кг', 'СВ кг', '% ГП', '% СВ']
 
-def parse_excel_ration(
-    path: str,
-    sheet: Optional[str | int] = 0
-) -> List[Tuple[Any, Any]]:
+# def parse_excel_ration(
+#     path: str,
+#     sheet: Optional[str | int] = 0
+# ) -> List[Tuple[Any, Any]]:
+#     """
+#     Читает Excel и возвращает список кортежей в порядке COLUMNS
+#     """
+
+#     df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
+
+#     def norm(s: str) -> str:
+#         return str(s).strip().replace("\n", " ").replace("\t", " ")
+
+#     df.columns = [norm(c) for c in df.columns]
+
+#     # 4. проверяем, что все нужные колонки есть; если нет — пробуем подобрать по «похожести»
+#     missing = [c for c in COLUMNS if c not in df.columns]
+#     if missing:
+#         # простая эвристика для подбора по «началу»/«вхождению»
+#         def find_like(target: str) -> Optional[str]:
+#             tl = target.lower()
+#             for col in df.columns:
+#                 cl = col.lower()
+#                 if cl == tl or tl in cl or cl in tl:
+#                     return col
+#             return None
+
+#         rename_map = {}
+#         for need in missing:
+#             guess = find_like(need)
+#             if guess:
+#                 rename_map[guess] = need
+#         if rename_map:
+#             df = df.rename(columns=rename_map)
+
+#     # финальная валидация
+#     still_missing = [c for c in COLUMNS if c not in df.columns]
+#     if still_missing:
+#         raise ValueError(f"В Excel отсутствуют нужные колонки: {still_missing}. Найдены: {list(df.columns)}")
+
+
+#     numeric_cols = COLUMNS[1:]
+#     for col in numeric_cols:
+#         df[col] = (
+#             df[col]
+#             .astype(str)
+#             .str.replace(",", ".", regex=False)
+#             .replace({"None": np.nan, "nan": np.nan, "": np.nan})
+#         )
+#         df[col] = pd.to_numeric(df[col], errors="coerce")
+
+#     df = df[COLUMNS]
+#     df = df.dropna(how="all")
+
+#     full_rows: List[Tuple[Any, Any, Any, Any, Any]] = list(df.itertuples(index=False, name=None))
+#     rows = [(row[0], row[5]) for row in full_rows]
+#     return rows
+
+
+# def parse_excel_ration(
+#     path: str,
+#     sheet: Optional[str | int] = 0
+# ) -> Tuple[List[Tuple[Any, Any]], dict]:
+#     """
+#     Читает Excel с рационом и возвращает 2 таблицы:
+#     1. ration_data — список кортежей (ингредиент, значение СВ)
+#     2. step_table — словарь {нутриент: значение по СВ} из блока "Сводный анализ"
+#     """
+
+#     def norm(s: str) -> str:
+#         return str(s).strip().replace("\n", " ").replace("\t", " ")
+
+#     # Загружаем весь Excel (чтобы взять обе таблицы)
+#     xls = pd.ExcelFile(path, engine="openpyxl")
+
+#     # ---------- 1. Основная таблица "Ингредиенты" ----------
+#     df = pd.read_excel(xls, sheet_name=sheet)
+
+#     df.columns = [norm(c) for c in df.columns]
+
+#     # Находим похожие колонки
+#     missing = [c for c in COLUMNS if c not in df.columns]
+#     if missing:
+#         def find_like(target: str) -> Optional[str]:
+#             tl = target.lower()
+#             for col in df.columns:
+#                 cl = col.lower()
+#                 if cl == tl or tl in cl or cl in tl:
+#                     return col
+#             return None
+
+#         rename_map = {}
+#         for need in missing:
+#             guess = find_like(need)
+#             if guess:
+#                 rename_map[guess] = need
+#         if rename_map:
+#             df = df.rename(columns=rename_map)
+
+#     still_missing = [c for c in COLUMNS if c not in df.columns]
+#     if still_missing:
+#         raise ValueError(f"В Excel отсутствуют нужные колонки: {still_missing}. Найдены: {list(df.columns)}")
+
+#     # Преобразуем числовые колонки
+#     numeric_cols = COLUMNS[1:]
+#     for col in numeric_cols:
+#         df[col] = (
+#             df[col]
+#             .astype(str)
+#             .str.replace(",", ".", regex=False)
+#             .replace({"None": np.nan, "nan": np.nan, "": np.nan})
+#         )
+#         df[col] = pd.to_numeric(df[col], errors="coerce")
+
+#     df = df[COLUMNS].dropna(how="all")
+
+#     # ration_data — то же, что из PDF (ингредиент и СВ)
+#     ration_data = [(row["Ингредиент"], row["СВ"]) for _, row in df.iterrows() if pd.notna(row["СВ"])]
+
+#     # ---------- 2. Вторая таблица: "Сводный анализ" ----------
+#     # Ищем лист или область с анализом
+#     step_table = {}
+#     possible_sheets = [s for s in xls.sheet_names if "анализ" in s.lower()]
+#     if possible_sheets:
+#         df2 = pd.read_excel(xls, sheet_name=possible_sheets[0])
+#         df2.columns = [norm(c) for c in df2.columns]
+
+#         # Пробуем найти колонки с названием и СВ
+#         name_col = next((c for c in df2.columns if "нутриент" in c.lower() or "показатель" in c.lower()), None)
+#         dm_col = next((c for c in df2.columns if "св" in c.lower() or "dm" in c.lower()), None)
+
+#         if name_col and dm_col:
+#             for _, row in df2.iterrows():
+#                 name = str(row[name_col]).strip()
+#                 val = row[dm_col]
+#                 if name and not pd.isna(val):
+#                     step_table[name] = float(val)
+#     else:
+#         step_table = {}
+
+#     return ration_data, step_table
+
+import xlrd
+import pandas as pd
+import numpy as np
+from typing import List, Tuple, Any, Optional, Dict
+
+COLUMNS = ['Ингредиенты', 'СВ %', 'ГП кг', 'СВ кг', '% ГП', '% СВ']
+
+def parse_excel_ration(path: str, sheet: Optional[int] = 0, max_search_rows: int = 100
+                               ) -> Tuple[List[Tuple[str, float]], Dict[str, float]]:
     """
-    Читает Excel и возвращает список кортежей в порядке COLUMNS
+    Читает .xls и возвращает:
+      1. ration_data — список (Ингредиент, %СВ)
+      2. step_table — словарь сводного анализа {Нутриент: СВ}
+    Поиск первой таблицы заканчивается при нахождении "Общие значения".
     """
+    book = xlrd.open_workbook(path)
+    sheet = book.sheet_by_index(sheet)
 
-    df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
+    # --- 1. Ищем заголовок первой таблицы ---
+    header_row_idx = None
+    for r in range(min(sheet.nrows, max_search_rows)):
+        row = sheet.row_values(r)
+        if any("Ингредиент" in str(cell) for cell in row) and any("СВ" in str(cell) for cell in row):
+            header_row_idx = r
+            break
+    if header_row_idx is None:
+        raise ValueError(f"Не найден заголовок первой таблицы в первых {max_search_rows} строках.")
 
-    def norm(s: str) -> str:
-        return str(s).strip().replace("\n", " ").replace("\t", " ")
+    # --- 2. Читаем таблицу до "Общие значения" ---
+    table_rows = []
+    end_row_idx = header_row_idx + 1
+    for r in range(header_row_idx + 1, sheet.nrows):
+        row = sheet.row_values(r)
+        if any("Общие значения" in str(cell) for cell in row):
+            break
+        table_rows.append(row)
+        end_row_idx = r
 
-    df.columns = [norm(c) for c in df.columns]
+    # --- 3. DataFrame только с нужными колонками ---
+    df1 = pd.DataFrame(table_rows, columns=[str(c).strip() for c in sheet.row_values(header_row_idx)])
+    needed_cols = ["Ингредиенты", "СВ кг"]
 
-    # 4. проверяем, что все нужные колонки есть; если нет — пробуем подобрать по «похожести»
-    missing = [c for c in COLUMNS if c not in df.columns]
-    if missing:
-        # простая эвристика для подбора по «началу»/«вхождению»
-        def find_like(target: str) -> Optional[str]:
-            tl = target.lower()
-            for col in df.columns:
-                cl = col.lower()
-                if cl == tl or tl in cl or cl in tl:
-                    return col
-            return None
+    # Попытка сопоставления похожих названий
+    for target in needed_cols:
+        if target not in df1.columns:
+            for col in df1.columns:
+                if target.lower() in col.lower():
+                    df1 = df1.rename(columns={col: target})
 
-        rename_map = {}
-        for need in missing:
-            guess = find_like(need)
-            if guess:
-                rename_map[guess] = need
-        if rename_map:
-            df = df.rename(columns=rename_map)
+    # Приведение к числу
+    df1["СВ кг"] = pd.to_numeric(df1["СВ кг"].astype(str).str.replace(",", "."), errors="coerce")
 
-    # финальная валидация
-    still_missing = [c for c in COLUMNS if c not in df.columns]
-    if still_missing:
-        raise ValueError(f"В Excel отсутствуют нужные колонки: {still_missing}. Найдены: {list(df.columns)}")
+    # --- 4. Сумма всех СВ кг ---
+    total_sv = df1["СВ кг"].sum()
+    if total_sv == 0:
+        raise ValueError("Сумма СВ кг равна нулю, невозможно вычислить %СВ.")
+
+    # --- 5. Формируем список кортежей (Ингредиент, %СВ) ---
+    ration_data = [(row["Ингредиенты"], row["СВ кг"] / total_sv * 100) 
+                   for _, row in df1.iterrows() if pd.notna(row["СВ кг"])]
+
+    step_table = parse_step_table_excel(sheet, start_row=end_row_idx+1)
+
+    return ration_data, step_table
 
 
-    numeric_cols = COLUMNS[1:]
-    for col in numeric_cols:
-        df[col] = (
-            df[col]
-            .astype(str)
-            .str.replace(",", ".", regex=False)
-            .replace({"None": np.nan, "nan": np.nan, "": np.nan})
-        )
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+def parse_step_table_excel(sheet, start_row: int, max_search_rows: int = 1000) -> Dict[str, float]:
+    """
+    Парсит вторую таблицу (сводный анализ) начиная со строки start_row.
+    Поддерживает несколько блоков под друг другом, игнорирует мусор и пустые строки.
+    Возвращает словарь {Нутриент: СВ}.
+    """
+    step_table = {}
+    r = start_row
+    while r < min(sheet.nrows, start_row + max_search_rows):
+        row = sheet.row_values(r)
 
-    df = df[COLUMNS]
-    df = df.dropna(how="all")
+        # Ищем заголовок блока
+        header_cols = {}
+        for idx, cell in enumerate(row):
+            c = str(cell).replace("\n", " ").strip().lower()
+            if "нутриент" in c or "показатель" in c:
+                header_cols['name'] = idx
+            elif "св" in c or "dm" in c:
+                header_cols['value'] = idx
 
-    full_rows: List[Tuple[Any, Any, Any, Any, Any]] = list(df.itertuples(index=False, name=None))
-    rows = [(row[0], row[5]) for row in full_rows]
-    return rows
+        if 'name' in header_cols and 'value' in header_cols:
+            # Нашли заголовок блока, читаем строки до пустой/мусорной строки
+            r += 1
+            while r < sheet.nrows:
+                r_row = sheet.row_values(r)
+                # Проверка на пустую строку
+                if all(str(c).strip() == "" for c in r_row):
+                    break
+
+                # Извлекаем название и значение
+                name_cell = str(r_row[header_cols['name']]).replace("\n", " ").strip()
+                val_cell = r_row[header_cols['value']]
+
+                if name_cell and str(val_cell).strip():
+                    try:
+                        step_table[name_cell] = float(val_cell)
+                    except:
+                        # Пропускаем некорректные значения
+                        pass
+                r += 1
+        else:
+            # Если нет заголовка блока — просто идем дальше
+            r += 1
+
+    return step_table
 
 
 def parse_pdf_for_tables(pdf_path: str):
@@ -119,11 +316,11 @@ def parse_pdf_for_tables(pdf_path: str):
                         row.append(cleaned)
             ration_data.append([row[0], row[5]])
 
-    step_table = parse_step_table(text)
+    step_table = parse_step_table_pdf(text)
     return ration_data, step_table
 
 
-def parse_step_table(text: str):
+def parse_step_table_pdf(text: str):
     """
     Парсит из текста PDF раздел 'Сводный анализ: Лактирующая корова'
     и возвращает только два поля: name (нутриент) и dm (значение по СВ).
@@ -211,7 +408,7 @@ def extract_text_with_pypdf2(pdf_path):
 
 
 if __name__ == "__main__":
-    print(sum([i for _, i in parse_excel_ration("test_data/Гилево Д1 25.07.25_АФМ.xlsx")]))
+    print(sum([i for _, i in parse_excel_ration("test_data/ds.xlsx")]))
     pdf_path = "test_data/Д0 Высокое 25.02.25_ЭНАЛБ.pdf"
     ration_table = parse_pdf_for_tables(pdf_path)[0]
     step = parse_step_table(extract_text_with_pypdf2(pdf_path))

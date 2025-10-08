@@ -1006,7 +1006,7 @@ class NewReport(QDialog):
                 )
 
             except Exception as e:
-                print("ошибка в _finish", e)
+                print("ошибка в моделях или репорте", e)
                 # mb = QMessageBox(self)
                 # mb.setIcon(QMessageBox.Icon.Critical)
                 # mb.setWindowTitle("Ошибка")

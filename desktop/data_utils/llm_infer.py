@@ -1,5 +1,9 @@
 from llama_cpp import Llama, LlamaGrammar
 from transformers import AutoTokenizer
+import traceback
+from pathlib import Path
+from .llm_runtime import get_llm
+
 
 from .prompt import grammar_str, norm_prompt, sys_prompt
 
@@ -11,12 +15,7 @@ model_path = "models/Qwen3-0.6B-Q8_0.gguf"
 def llm_cleaning(batch):
     grammar = LlamaGrammar.from_string(grammar_str)
 
-    llm = Llama(
-        model_path=model_path,
-        n_ctx=1024,
-        n_batch=512,
-        verbose=False
-    )
+    llm = get_llm()  # уже готовый, потокобезопасный доступ
 
     messages = []
 

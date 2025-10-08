@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
-from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
+from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict, nutri_reverse
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
 
 
@@ -43,8 +43,8 @@ def extract_to_row(ration, nutrients, json_path):
     uniq_step_dict = {elem: ind + len(uniq_changed_ration) for ind, elem in enumerate(uniq_step)}
 
     name_mapping = change_mapping()
-    llm_elems = {}
     new_ration = []
+    llm_elems = {}  # {исходная_строка: индекс в new_ration}
 
     for i, (elem, val) in enumerate(ration):
         if elem in uniq_changed_ration:
@@ -54,25 +54,37 @@ def extract_to_row(ration, nutrients, json_path):
         else:
             clear_elem = fix_name(elem)
             if clear_elem is None:
-                llm_elems[elem] = i
+                llm_elems[elem] = len(new_ration)  # индекс где положим сейчас
 
         new_ration.append((clear_elem, val))
 
-    if llm_elems:
-        cleans = llm_cleaning(list([llm_elems.values]))
-        for k, v in cleans.items():
-            new_ration[llm_elems[k]][0] = v
+    print(new_ration)
 
-    new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
+    # Нормализация через LLM тех, кого не распознали
+    unknowns = list(llm_elems.keys())
+    if unknowns:
+        cleans = llm_cleaning(unknowns)  # <<-- ВАЖНО: именно ключи!
+        # cleans: {оригинал: нормализованное}
+        for orig, normalized in cleans.items():
+            idx = llm_elems[orig]
+            _, old_val = new_ration[idx]
+            new_ration[idx] = (normalized, old_val)
+
+    # Собираем словарь оригинал -> нормализовано
+    # (подчистим пробелы/переводы строк, чтобы ключи совпадали с тем, что в JSON)
+    def _norm_key(s: str) -> str:
+        return re.sub(r"\s+", " ", s).strip() if isinstance(s, str) else s
+
+    new_ration_dct = {_norm_key(orig): _norm_key(norm)
+                      for (orig, _), (norm, _) in zip(ration, new_ration)}
 
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # добавляем поле Normalized в каждый элемент ration_rows
     for json_row in data.get("ration_rows", []):
-        json_row["Normalized"] = new_ration_dct[json_row.get("Ингредиенты", "")]
+        key = _norm_key(json_row.get("Ингредиенты", ""))
+        json_row["Normalized"] = new_ration_dct.get(key, None)  # безопасно
 
-    # сохраняем обратно
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -96,6 +108,7 @@ def load_data_from_json(path_name: str):
     with open(path_name, "r", encoding="utf-8") as f:
         json_file = json.load(f)
 
+    print(33)
     rational_rows = [(elem["Ингредиенты"], elem["%СВ"]) for elem in json_file['ration_rows']]
     nutrients_rows = [(elem["Нутриент"], elem["СВ"]) for elem in json_file['nutrients_rows']]
 
@@ -154,6 +167,7 @@ def predict_importance_acids(data, acid, name,
             os.makedirs(f"{graphics_path}/{output_dir}")
 
         shap.plots.waterfall(shap_values[0])
+        plt.title(f"{acid}", fontsize=12, pad=20)
         plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
         plt.close()
 
@@ -222,6 +236,7 @@ def predict_importance_nutri(data, list_of_main_nutri, name,
 
             print(f"{graphics_path}/{output_dir}/{key}.png")
             shap.plots.waterfall(shap_values[0])
+            plt.title(f"Вклад признаков в предсказание {item}", fontsize=12, pad=20)
             plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
             plt.close()
 
@@ -291,6 +306,14 @@ def make_uni_nutri(name, list_of_main_nutri, graphics_path="desktop/graphics", g
         grid.paste(img, (w * c, h * r))
 
     grid.save(f"{graphics_path}/{output_dir}/uni_nutri.png")
+    with open(name, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+        if "graphics" not in json_data:
+            json_data["graphics"] = {}
+        json_data["graphics"]["uni_nutri"] = str(Path(f"{graphics_path}/{output_dir}/uni_nutri.png").resolve())
+
+    with open(name, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, ensure_ascii=False, indent=2)
 
 
 def predict_from_file(json_report, model_path="models/classic_pipe/acids"):

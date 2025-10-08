@@ -152,11 +152,11 @@ def normalize_ration_rows(rows: List[Dict[str, str]]) -> List[RationRow]:
 # ==========================
 
 DEFAULT_TARGETS: Dict[str, Tuple[Optional[float], Optional[float]]] = {
-    "Пальмитиновая": (25.0, 31.0),
-    "Стеариновая":   (8.0,  12.5),
-    "Олеиновая":     (22.0, 28.0),
-    "Линолевая":     (1.5,  3.5),
-    "Лауриновая":    (2.0,  4.4),  # обновлено по твоему правилу
+    "Лауриновая" : (2.0, 4.4),
+    "Линолевая" : (2.2, 5.0),
+    "Олеиновая" : (20.0, 28.0),
+    "Пальмитиновая" : (21.0, 32.0),
+    "Стеариновая" : (8.0, 13.5)  # обновлено по твоему правилу
 }
 
 def classify_acids(current: Dict[str, float],
@@ -231,6 +231,7 @@ def render_acid_graphs_first(graphics: dict[str, str],
         """
         # 1) сводный 'uni'
         uni_path = _resolve_graph_path("uni", graphics, out_report_md, default_filename="uni_acids.png")
+        print(uni_path)
         if uni_path:
             return (
                 "\n## Важность рациона для жирных кислот (сводный график)\n\n"
@@ -250,28 +251,32 @@ def render_acid_graphs_first(graphics: dict[str, str],
         return ("\n\n".join(lines) + "\n") if any_added else ""
 
 
-def render_other_graphs(graphics: dict[str, str],
-                        out_report_md: Path) -> str:
+def render_other_graphs(graphics: dict[str, str], out_report_md: Path) -> str:
     """
-    Для ключей "0","1",... берём путь из JSON, иначе — из desktop/graphics/<report_id>/<n>.png
+    Секция «прочие графики».
+    1) Если есть сводный график нутриентов 'uni_nutri' → показываем только его.
+    2) Иначе — показываем графики по числовым ключам "0","1",...
+       (или ищем их в desktop/graphics/<report_id>/<n>.png).
     """
+    # 1) приоритет — сводный по нутриентам
+    uni_nutri_path = _resolve_graph_path("uni_nutri", graphics, out_report_md, default_filename="uni_nutri.png")
+    if uni_nutri_path:
+        return (
+            "\n## Нутриенты: сводный график\n\n"
+            f'<img src="{to_file_url(uni_nutri_path)}" alt="uni_nutri" width="960">\n'
+        )
+
+    # 2) фоллбэк — числовые ключи
     keys = sorted([k for k in graphics.keys() if re.fullmatch(r"\d+", k)], key=lambda x: int(x))
     lines = ["\n## Прочие графики\n"]
     any_added = False
-    gdir = _graphics_dir_for(out_report_md)
 
-    def _resolve(k: str) -> str | None:
-        p = graphics.get(k)
-        if p:
-            return p
-        if gdir is not None:
-            cand = gdir / f"{k}.png"
-            if cand.exists():
-                return str(cand)
-        return None
+    if not keys:
+        # если JSON не содержит числовых ключей — попробуем 0..63 рядом в graphics/<report_id>
+        keys = [str(i) for i in range(64)]
 
-    for k in keys or [str(i) for i in range(0, 64)]:  # на случай, если в JSON ключей нет
-        path = _resolve(k)
+    for k in keys:
+        path = _resolve_graph_path(k, graphics, out_report_md, default_filename=f"{k}.png")
         if not path:
             continue
         lines.append(f'<img src="{to_file_url(path)}" alt="graph_{k}" width="720">')

@@ -9,16 +9,14 @@ from PyQt6.QtWidgets import (
     QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
     QStackedWidget, QDialog, QMessageBox
 )
-from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt, QFileSystemWatcher
+from PyQt6.QtGui import QIcon, QMovie
+from PyQt6.QtCore import Qt, QFileSystemWatcher, QPropertyAnimation, QEasingCurve
 
-from typing import Optional,Dict,Any
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
-from .new_report_window import NewReport
-from .new_report_window import AdminNewReport
-from .api_client import APIClient
-addr="http://0.0.0.0:8000"
+from .new_report_window import NewReport, RefactorReport
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -119,13 +117,12 @@ class MainWindow(QWidget):
         history_layout.addLayout(search_layout)
         history_layout.addWidget(self.history_list)
 
-        history_widget = QWidget()
-        history_widget.setLayout(history_layout)
-        history_widget.setObjectName("historyWidget")
-        history_widget.setMinimumWidth(230)
-        history_widget.setMaximumWidth(400)
+        self.history_widget = QWidget()
+        self.history_widget.setLayout(history_layout)
+        self.history_widget.setObjectName("historyWidget")
+        self.history_widget.setMinimumWidth(0)
+        self.history_widget.setMaximumWidth(400)
 
-        self.history_widget = history_widget
         self.history_widget.hide()
 
         # ===== Основное поле (Отчет) =====
@@ -136,10 +133,11 @@ class MainWindow(QWidget):
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         self.tabs = tabs  # сохранить ссылку на TabWidget
+        tabs.tabBar().setDrawBase(False)  # ← убирает базовую линию под вкладками
 
         # --- Вкладка Рацион ---
         # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
-        self.tab_ration_widget = NewReport()
+        self.tab_ration_widget = RefactorReport()
         self.tab_ration_debug = QTextEdit()
         self.tab_ration_debug.setReadOnly(True)
 
@@ -157,9 +155,32 @@ class MainWindow(QWidget):
         report_widget = QWidget()
         report_widget.setLayout(report_layout)
 
+        # ===== Вкладка анализа =====
+        self.tab_analysis = QWidget()
+        analysis_layout = QVBoxLayout(self.tab_analysis)
+        analysis_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # GIF
+        self.gif_label = QLabel()
+        self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.movie = QMovie("cow.gif")
+        self.gif_label.setMovie(self.movie)
+
+        # Надписи
+        self.phrase_label = QLabel("Анализ таблицы моделью...")
+        self.phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        analysis_layout.addWidget(self.gif_label)
+        analysis_layout.addWidget(self.phrase_label)
+
+        # Добавляем вкладку в QTabWidget, но изначально выключаем
+        self.tabs.addTab(self.tab_analysis, "Анализ")
+        self.analysis_index = self.tabs.indexOf(self.tab_analysis)
+        self.tabs.setTabEnabled(self.analysis_index, False)
+
         # ===== Сплиттер =====
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(history_widget)
+        splitter.addWidget(self.history_widget)
         splitter.addWidget(report_widget)
         splitter.setHandleWidth(0)
         splitter.setChildrenCollapsible(False)
@@ -177,11 +198,33 @@ class MainWindow(QWidget):
         self.refresh_reports_list()
 
     def toggle_history(self):
-        """Сворачивает/раскрывает панель истории"""
-        if self.history_widget.isVisible():
-            self.history_widget.hide()
-        else:
+        """Плавное сворачивание/раскрытие панели истории"""
+        # Если уже идёт анимация — прерываем
+        if hasattr(self, "anim") and self.anim.state() == self.anim.State.Running:
+            return
+
+        start_width = self.history_widget.width()
+        end_width = 0 if self.history_widget.isVisible() else 230
+
+        # Если будем показывать — убедимся, что виджет отображается
+        if not self.history_widget.isVisible():
             self.history_widget.show()
+
+        # Создаём анимацию по свойству maximumWidth
+        self.anim = QPropertyAnimation(self.history_widget, b"maximumWidth")
+        self.anim.setDuration(350)  # длительность, мс
+        self.anim.setStartValue(start_width)
+        self.anim.setEndValue(end_width)
+        self.anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        # Когда анимация закончится — если свернули, скрываем
+        def on_finished():
+            if end_width == 0:
+                self.history_widget.hide()
+                self.history_widget.setMaximumWidth(230)  # вернуть ограничение
+
+        self.anim.finished.connect(on_finished)
+        self.anim.start()
 
     def load_reports_to_list(self):
         """Обновляет список отчетов и показывает историю"""
@@ -307,8 +350,8 @@ class MainWindow(QWidget):
             return
 
         report_file = item.data(Qt.ItemDataRole.UserRole)
-        print(report_file)
-        #print(report_file)#путь находится правильно
+
+        #print(report_file )# путь находится правильно
         #снизу в комменте какой то бред
         '''
         if not report_file:
@@ -331,10 +374,12 @@ class MainWindow(QWidget):
         nutrient_array = report_data.get("nutrients_rows", None)
 
         #print("массив с рационом",ration_array) #работает
+        self.tab_ration_widget.get_json_path(report_file)
         self.tab_ration_widget.load_from_json(ration_array,"left")
         self.tab_ration_widget.load_from_json(nutrient_array,"right")
 
         self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
+
         '''
         shown = False
 
@@ -403,14 +448,13 @@ class MainWindow(QWidget):
         layout.addWidget(error_label)
         layout.addWidget(confirm_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ===== логика кнопки для входа как админ =====
+        # ===== Логика проверки =====
         def check_key():
             entered = key_input.text().strip()
             correct_key = "1234"  # <-- здесь можешь заменить на свой ключ
             if entered == correct_key:
                 dialog.accept()
-                 #функция котопая меняет new_report_window для админа
-                replace_with_admin_window(self, admin_window)
+                QMessageBox.information(self, "Успех", "Доступ разрешён ✅")
             else:
                 # Выделяем ошибку визуально
                 key_input.setStyleSheet("""
@@ -434,201 +478,6 @@ class MainWindow(QWidget):
 
         dialog.exec()
 
-
-def replace_with_admin_window(window, admin_window):
-    # закрываем main окно и открываем админское
-    window.close()
-    admin_window.show()
-
-
-class AdminMainWindow(MainWindow):
-    def __init__(self):
-        #super().__init__()
-        self.setWindowTitle("Шаблон интерфейса")
-        self.setGeometry(100, 100, 1400, 800)
-        self.api_client = APIClient(addr)
-        self.all_reports = []  # для фильтрации
-
-        # Папка с отчетами (меняем в соответствии с твоим текущим расположением)
-        self.reports_dir = Path("desktop/reports")
-        self.reports_dir.mkdir(parents=True, exist_ok=True)
-
-        # Файловый watcher для автоматического обновления списка
-        self.fs_watcher = QFileSystemWatcher([str(self.reports_dir)])
-        self.fs_watcher.directoryChanged.connect(self.on_reports_dir_changed)
-
-        # ===== Сайдбар =====
-        sidebar_layout = QVBoxLayout()
-        sidebar_layout.setContentsMargins(5, 40, 0, 0)
-        sidebar_layout.setSpacing(10)
-
-        self.btn_add_sidebar = QPushButton()
-        self.btn_add_sidebar.setIcon(QIcon("desktop/icons/add_report.png"))
-        self.btn_add_sidebar.setIconSize(QtCore.QSize(26, 26))
-        self.btn_add_sidebar.setFixedSize(32, 32)
-        self.btn_add_sidebar.clicked.connect(self.create_new_report)
-
-        self.btn_load_reports = QPushButton()
-        self.btn_load_reports.setIcon(QIcon("desktop/icons/history.png"))
-        self.btn_load_reports.setIconSize(QtCore.QSize(26, 26))
-        self.btn_load_reports.setFixedSize(32, 32)
-        self.btn_load_reports.clicked.connect(self.load_reports_to_list)
-
-        self.btn_admin_keys = QPushButton()
-        self.btn_admin_keys.setIcon(QIcon("desktop/icons/admin_keys.png"))
-        self.btn_admin_keys.setIconSize(QtCore.QSize(26, 26))
-        self.btn_admin_keys.setFixedSize(32, 32)
-        self.btn_admin_keys.clicked.connect(self.show_access_key_dialog)
-
-        sidebar_layout.addWidget(self.btn_add_sidebar)
-        sidebar_layout.addWidget(self.btn_load_reports)
-        sidebar_layout.addWidget(self.btn_admin_keys)
-        sidebar_layout.addStretch()
-
-        sidebar_widget = QWidget()
-        sidebar_widget.setLayout(sidebar_layout)
-        sidebar_widget.setFixedWidth(40)
-        sidebar_widget.setObjectName("sidebar")
-        # ===== Средний бар (История) =====
-        history_layout = QVBoxLayout()
-        history_layout.setContentsMargins(0, 0, 0, 0)
-        history_layout.setSpacing(0)
-
-        # Заголовок
-        header_layout = QHBoxLayout()
-        lbl_history = QLabel("История")
-        lbl_history.setObjectName("headerLabel")
-
-        btn_add_history = QPushButton()
-        btn_add_history.setIcon(QIcon("desktop/icons/add_report.png"))
-        btn_add_history.setIconSize(QtCore.QSize(22, 22))
-        btn_add_history.setFixedSize(26, 26)
-        btn_add_history.clicked.connect(self.create_new_report)
-
-        btn_close_history = QPushButton()
-        btn_close_history.setIcon(QIcon("desktop/icons/close_history.png"))
-        btn_close_history.setIconSize(QtCore.QSize(22, 22))
-        btn_close_history.setFixedSize(28, 28)
-        btn_close_history.clicked.connect(self.toggle_history)
-
-        header_layout.addWidget(lbl_history)
-        header_layout.addStretch()
-        header_layout.addWidget(btn_add_history)
-        header_layout.addWidget(btn_close_history)
-        header_layout.setContentsMargins(2, 8, 2, 0)
-        header_layout.setSpacing(0)
-
-        # Поиск
-        search_layout = QHBoxLayout()
-        self.input_search = QLineEdit()
-        self.input_search.setPlaceholderText("Поиск отчета по имени/отделу/периоду")
-        self.input_search.setObjectName("searchInput")
-        self.input_search.setFixedHeight(32)
-        self.input_search.textChanged.connect(self.filter_reports)
-
-        search_layout.addWidget(self.input_search)
-        search_layout.setContentsMargins(0, 6, 0, 0)
-        search_layout.setSpacing(0)
-
-        # Список
-        self.history_list = QListWidget()
-        self.history_list.setObjectName("historyList")
-        self.history_list.itemClicked.connect(self.display_report)
-        
-        # Компоновка
-        history_layout.addLayout(header_layout)
-        history_layout.addLayout(search_layout)
-        history_layout.addWidget(self.history_list)
-
-        history_widget = QWidget()
-        history_widget.setLayout(history_layout)
-        history_widget.setObjectName("historyWidget")
-        history_widget.setMinimumWidth(230)
-        history_widget.setMaximumWidth(400)
-
-        self.history_widget = history_widget
-        self.history_widget.hide()
-
-        # ===== Основное поле (Отчет) =====
-        report_layout = QVBoxLayout()
-        report_layout.setContentsMargins(0, 0, 0, 0)
-        report_layout.setSpacing(0)
-
-        tabs = QTabWidget()
-        tabs.setDocumentMode(True)
-        self.tabs = tabs  # сохранить ссылку на TabWidget
-
-        # --- Вкладка Рацион ---
-        # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
-        self.tab_ration_widget = AdminNewReport()
-        self.tab_ration_debug = QTextEdit()
-        self.tab_ration_debug.setReadOnly(True)
-
-        self.ration_stack = QStackedWidget()
-        self.ration_stack.addWidget(self.tab_ration_widget)  # 0
-        self.ration_stack.addWidget(self.tab_ration_debug)   # 1
-
-        tabs.addTab(self.ration_stack, "Рацион")
-
-        # --- Вкладка Отчет ---
-        self.tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
-        tabs.addTab(self.tab_report, "Отчет")
-
-        report_layout.addWidget(tabs)
-        report_widget = QWidget()
-        report_widget.setLayout(report_layout)
-
-        # ===== Сплиттер =====
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(history_widget)
-        splitter.addWidget(report_widget)
-        splitter.setHandleWidth(0)
-        splitter.setChildrenCollapsible(False)
-        splitter.setSizes([280, 1060])
-
-        # ===== Главный layout =====
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        main_layout.addWidget(sidebar_widget)
-        main_layout.addWidget(splitter)
-        self.setLayout(main_layout)
-
-        # Первоначальная загрузка списка
-        self.refresh_reports_list()
-
-    def create_new_report(self):
-        dialog = AdminNewReport()
-        dialog.exec()
-        # После закрытия диалога — обновим список (на случай, если watcher пропустил момент)
-        self.refresh_reports_list()
-
-    def refresh_reports_list(self):
-        """Обновляет содержимое history_list по текущему состоянию папки reports (без смены видимости)."""
-        self.history_list.clear()
-        # Получаем список файлов от loader
-        reports_names=self.api_client.get_reports()
-        if reports_names is None:
-            print("Ошибка загрузки отчетов с сервера")
-        # Сохраняем полный список , пригодится для фильтрации
-        self.all_reports = reports_names
-
-        for name in reports_names:
-            self._add_report_to_list(name)
-    def _add_report_to_list(self,report_name: str):
-        item=QListWidgetItem(report_name)
-        self.history_list.addItem(str)
-    def disply_report(self,item):
-        report_data=self.api_client.get_report(item)
-        if report_data is None:
-            print(f"Ошибка загрузки отчета {item}")
-            return
-        # todo: преобразовать report_data в норм вид
-        self._display_report_data(report_data)
-    def _display_report_data(self,report_data:Dict):
-        #todo
-        pass
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
@@ -636,9 +485,6 @@ if __name__ == "__main__":
     with open("desktop/styles/styles_light.qss", "r", encoding="utf-8") as f:
         app.setStyleSheet(f.read())
 
-    admin_window = AdminMainWindow()
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
-
-

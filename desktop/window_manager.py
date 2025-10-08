@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QApplication
 import sys
-from .main import send_new_reports
+
 class WindowManager:
     def __init__(self):
         self.app = QApplication(sys.argv)

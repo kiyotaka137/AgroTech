@@ -656,10 +656,13 @@ class NewReport(QDialog):
         m = footer_layout.contentsMargins()
         spacing = footer_layout.spacing()
 
-        tools_h = self.bottom_tools_layout.sizeHint().height()
-        center_h = max(self.bottom_center_layout.sizeHint().height(),
-                       self.analyze_btn.sizeHint().height())
-        status_h = self.status_label.sizeHint().height()
+        tools_h = self.bottom_tools_layout.sizeHint().height() if getattr(self, "bottom_tools_layout", None) is not None else 0
+
+        center_layout_h = self.bottom_center_layout.sizeHint().height() if getattr(self, "bottom_center_layout", None) is not None else 0
+        analyze_h = self.analyze_btn.sizeHint().height() if getattr(self, "analyze_btn", None) is not None else 0
+        center_h = max(center_layout_h, analyze_h)
+
+        status_h = self.status_label.sizeHint().height() if getattr(self, "status_label", None) is not None else 0
 
         content_min = m.top() + tools_h + spacing + center_h + spacing + status_h + m.bottom()
 
@@ -1175,6 +1178,161 @@ class RefactorReport(NewReport):
     def get_json_path(self, path):
         self.json_path = path
 
+class AdminNewReport(NewReport):
+    """
+    Вариант окна, где удалены/скрыты кнопки:
+      - Excel, PDF (верхняя панель)
+      - Добавить строку, Удалить выделенные (нижняя панель)
+      - Анализировать (центральная кнопка)
+    Реализовано через наследование: после инициализации базового окна
+    скрываем/удаляем виджеты и корректируем footer.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+
+      
+        # Список имен атрибутов-кнопок, которые нужно скрыть/удалить
+        btn_names = [
+            "excel_btn", "pdf_btn",
+            "btn_add_row_left", "btn_remove_row_left",
+            "analyze_btn"
+        ]
+
+        # Скрываем кнопки, если они существуют
+        for name in btn_names:
+            w = getattr(self, name, None)
+            if w is not None:
+                try:
+                    w.hide()
+                except Exception:
+                    pass
+                # разорвать связь с layout'ом (если нужно)
+                try:
+                    w.setParent(None)
+                except Exception:
+                    pass
+                # убрать ссылку чтобы GC мог убрать (по желанию)
+                try:
+                    delattr(self, name)
+                except Exception:
+                    # если delattr не работает (например, свойство не найдено) — игнорируем
+                    pass
+
+        # Если присутствуют layout'ы нижней панели — очистим их (убираем пустые места)
+        try:
+            if hasattr(self, "bottom_tools_layout"):
+                # извлекаем все элементы и удаляем из layout'а
+                l = self.bottom_tools_layout
+                for i in reversed(range(l.count())):
+                    it = l.takeAt(i)
+                    if it:
+                        w = it.widget()
+                        if w:
+                            try:
+                                w.setParent(None)
+                            except Exception:
+                                pass
+            if hasattr(self, "bottom_center_layout"):
+                l = self.bottom_center_layout
+                for i in reversed(range(l.count())):
+                    it = l.takeAt(i)
+                    if it:
+                        w = it.widget()
+                        if w:
+                            try:
+                                w.setParent(None)
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
+        # Оставим только статус в футере — подгоняем высоту
+        try:
+            # переместим статус (если ещё не перемещён)
+            if hasattr(self, "status_label") and self.status_label.parent() is not self.footer:
+                self.status_label.setParent(self.footer)
+            # починим отступы футера
+            if hasattr(self, "footer") and self.footer is not None:
+                footer_layout = self.footer.layout()
+                if footer_layout is not None:
+                    footer_layout.setContentsMargins(12, 4, 12, 4)
+                    footer_layout.setSpacing(4)
+                    # удалим всё кроме status_label
+                    # сначала соберём, что в лэйауте
+                    for i in reversed(range(footer_layout.count())):
+                        item = footer_layout.itemAt(i)
+                        if item:
+                            widget = item.widget()
+                            # оставим только статус (по объекту сравнения)
+                            if widget is not None and widget is not self.status_label:
+                                footer_layout.removeWidget(widget)
+                                try:
+                                    widget.setParent(None)
+                                except Exception:
+                                    pass
+                    # затем добавим статус_label в конец, если нужно
+                    if self.status_label.parent() is not self.footer:
+                        footer_layout.addWidget(self.status_label)
+            # финальная подгонка
+            QTimer.singleShot(0, self._fit_footer_by_one_row)
+        except Exception:
+            pass
+
+        # Если хотите, можно и полностью удалить метод analyze_clicked у экземпляра:
+        try:
+            if hasattr(self, "analyze_btn") is False:
+                # если analyze_btn удалён, то де-факто кнопки нет — но чтобы быть уверенным,
+                # можем подменить метод на no-op
+                self.analyze_clicked = lambda *a, **k: None
+        except Exception:
+            pass
+
+        QTimer.singleShot(0,self._remove_name_complex_date_fields)
+    def _remove_name_complex_date_fields(self):
+            """Безопасно удаляет QLabel и QLineEdit 'Имя', 'Комплекс', 'Дата'."""
+            try:
+                # найдём layout, где лежат поля и подписи
+                fields_layout = None
+                if hasattr(self, "name_edit"):
+                    parent = self.name_edit.parent()
+                    if parent:
+                        # ищем QHBoxLayout, где находится name_edit
+                        layout = parent.layout()
+                        if layout:
+                            for i in range(layout.count()):
+                                item = layout.itemAt(i)
+                                sub = item.layout()
+                                if sub and isinstance(sub, QHBoxLayout):
+                                    # нашли тот, где поля и QLabel
+                                    for j in range(sub.count()):
+                                        w = sub.itemAt(j).widget()
+                                        if w is self.name_edit:
+                                            fields_layout = sub
+                                            break
+                            if fields_layout is None and isinstance(layout, QHBoxLayout):
+                                # fallback — может это и есть fields_layout
+                                fields_layout = layout
+
+                if fields_layout is None:
+                    return  # не нашли — просто выходим
+
+                # Удаляем из fields_layout все QLabel и QLineEdit с нужным текстом
+                for i in reversed(range(fields_layout.count())):
+                    item = fields_layout.itemAt(i)
+                    w = item.widget()
+                    if not w:
+                        continue
+                    if isinstance(w, QLineEdit):
+                        fields_layout.removeWidget(w)
+                        w.deleteLater()
+                    elif isinstance(w, QLabel) and w.text().strip(":") in ("Имя", "Комплекс", "Дата"):
+                        fields_layout.removeWidget(w)
+                        w.deleteLater()
+
+            except Exception as e:
+                print("Ошибка при удалении полей:", e)
 class AnalysisWorker(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(str)

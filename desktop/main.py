@@ -1,5 +1,6 @@
 # main.py
 import sys
+import os
 from pathlib import Path
 
 from PyQt6 import QtCore
@@ -18,6 +19,7 @@ from PyQt6.QtCore import (
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import NewReport, RefactorReport
+from .report import create_md_webview, write_report_files
 
 
 class MainWindow(QWidget):
@@ -151,7 +153,7 @@ class MainWindow(QWidget):
         tabs.addTab(self.ration_stack, "Рацион")
 
         # --- Вкладка Отчет ---
-        self.tab_report = QTextEdit("Здесь содержимое вкладки 'Отчет'")
+        self.tab_report = QWidget() # QTextEdit("Здесь содержимое вкладки 'Отчет'")
         tabs.addTab(self.tab_report, "Отчет")
 
         report_layout.addWidget(tabs)
@@ -379,7 +381,7 @@ class MainWindow(QWidget):
         ration_array = report_data.get("ration_rows", None)
         nutrient_array = report_data.get("nutrients_rows", None)
 
-        #print("массив с рационом",ration_array) #работает
+        #print("массив с рационом",ration_array) # работает
         self.tab_ration_widget.get_json_path(report_file)
         self.tab_ration_widget.load_from_json(ration_array,"left")
         self.tab_ration_widget.load_from_json(nutrient_array,"right")
@@ -415,8 +417,21 @@ class MainWindow(QWidget):
             self.ration_stack.setCurrentIndex(1)
 
         # === Текстовый отчет ===
-        report_text = report_data.get("report", "")
-        self.tab_report.setPlainText(report_text or "")
+        #report_text = report_data.get("report", "")
+        #self.tab_report.setPlainText(report_text or "")
+        try:
+            jsonname = os.path.splitext(os.path.basename(report_file))[0]
+            md_path = "desktop/final_reports/" + jsonname + ".md"
+            write_report_files(
+                input_json_path=report_file,
+                out_report_md=md_path,
+                update_json_with_report=True,
+                copy_images=True   # todo: без картинок для серверной части
+            )
+
+            create_md_webview(self.tab_report, "desktop/final_reports/" + jsonname + ".md")
+        except Exception as e:
+            print(e) # todo: всплывающую ошибку
 
     def on_reports_dir_changed(self, path):
         """

@@ -2,6 +2,7 @@ import json
 import pandas as pd
 import numpy as np
 import joblib as jl
+from pathlib import Path
 import shap
 import os
 import re
@@ -150,6 +151,16 @@ def predict_importance_acids(data, acid, name,
     plt.savefig(f"{graphics_path}/{output_dir}/{acid}.png", dpi=300, bbox_inches="tight")
     plt.close()
 
+    with open(name, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+        if "graphics" not in json_data:
+            json_data["graphics"] = {}
+
+        json_data["graphics"][acid] = str(Path(f"{graphics_path}/{output_dir}/{acid}.png").resolve())
+
+    with open(name, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, ensure_ascii=False, indent=2)
+
     return feature_val_dict
 
 
@@ -200,9 +211,20 @@ def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
         if not os.path.exists(f"{graphics_path}/{output_dir}"):
             os.makedirs(f"{graphics_path}/{output_dir}")
 
+        print(output_dir)
         shap.plots.waterfall(shap_values[0])
         plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
         plt.close()
+
+        with open(name, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+            if "graphics" not in json_data:
+                json_data["graphics"] = {}
+            json_data["graphics"][key] = str(Path(f"{graphics_path}/{output_dir}/{key}.png").resolve())
+
+
+        with open(name, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, ensure_ascii=False, indent=2)
 
     return nutri_dict
 
@@ -218,9 +240,9 @@ def cross_importance(importance_dict):
 
 
 def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
+    json_report = str(json_report)
     acids_dict = dict()
     importance_acid_dict = dict()
-    importance_nutri_dict = dict()
 
     data = load_data_from_json(json_report)
     data = clear_data(data)
@@ -238,8 +260,21 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
         importance = predict_importance_acids(data[0], acid, json_report)
         importance_acid_dict[acid] = importance
 
-    #print(importance_nutri_dict)
-    #print(importance_acid_dict)
+    # print(importance_nutri_dict)
+    # print(importance_acid_dict)
+
+    with open(json_report, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+        json_data["importance_acid"] = importance_acid_dict
+        json_data["importance_nutrient"] = importance_nutri_dict
+        json_data["result_acids"] = {
+            k: float(v[0])
+            for k, v in acids_dict.items()
+        }
+
+        print(json_data["result_acids"])
+    with open(json_report, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
     return acids_dict
 

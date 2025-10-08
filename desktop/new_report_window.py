@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import traceback
 from datetime import date, datetime
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QMovie, QColor, QFontDatabase
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
-from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread, pyqtSlot)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
 
@@ -815,7 +816,6 @@ class NewReport(QDialog):
             self.status_label.setText(f"Выбран Excel: {Path(path).name}")
 
             rows_rationtable, rows_nutrient = parse_pdf_for_tables(path)
-            print(rows_nutrient)
             self.filling_left_table_from_file(rows_rationtable)
             self.filling_right_table_from_file(rows_nutrient)
 
@@ -932,6 +932,7 @@ class NewReport(QDialog):
 
     def _analysis_error(self, msg):
         QMessageBox.critical(self, "Ошибка", f"Проблема с анализом:\n{msg}")
+
         self.analyze_btn.setEnabled(True)
         self.analysis_finished.emit()
               
@@ -966,10 +967,6 @@ class NewReport(QDialog):
             # работа мл моделей
             try:
                 result_acids = predict_from_file(file_path)
-                data["result_acids"] = {
-                    k: float(v[0])
-                    for k, v in result_acids.items()
-                }
             except Exception as e:
                 mb = QMessageBox(self)
                 mb.setIcon(QMessageBox.Icon.Critical)
@@ -979,12 +976,11 @@ class NewReport(QDialog):
                 self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(file_path)
 
-            data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-
-            # Перезаписываем файл с добавленным результатом
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
+            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
+            #
+            # # Перезаписываем файл с добавленным результатом
+            # with open(file_path, "w", encoding="utf-8") as f:
+            #     json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
@@ -1071,7 +1067,6 @@ class NewReport(QDialog):
 
                     # Ищем соответствующее значение в словаре
                     value = nutrients.get(key_text)  # Используем get чтобы избежать KeyError
-                    print(key_text, value)
                     # Создаем или получаем элемент для правой колонки
                     value_item = self.right_table.item(row, 1)
                     if value_item is None:
@@ -1106,10 +1101,6 @@ class RefactorReport(NewReport):
         try:
             with open(self.json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-
-
-            with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
 
             # работа мл моделей
             try:
@@ -1168,16 +1159,21 @@ class RefactorReport(NewReport):
         self.json_path = path
 
 class AnalysisWorker(QObject):
-    finished = pyqtSignal()
+    finished = pyqtSignal(object)   # отдадим результат в GUI
     error = pyqtSignal(str)
+    progress = pyqtSignal(str)
 
-    def __init__(self, func):
+    def __init__(self, func, *args, **kwargs):
         super().__init__()
         self.func = func
+        self.args = args
+        self.kwargs = kwargs
 
+    @pyqtSlot()
     def run(self):
         try:
-            self.func()
-            self.finished.emit()
-        except Exception as e:
-            self.error.emit(str(e))
+            # ⚠️ внутри func НЕЛЬЗЯ трогать QWidget/GUI!
+            result = self.func(*self.args, **self.kwargs)
+            self.finished.emit(result)
+        except Exception:
+            self.error.emit(traceback.format_exc())

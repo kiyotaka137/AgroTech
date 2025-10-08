@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
-#from .llm_infer import llm_cleaning
+from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
@@ -47,7 +47,9 @@ def extract_to_row(ration, nutrients, json_path):
     new_ration = []
 
     for i, (elem, val) in enumerate(ration):
-        if elem in name_mapping:
+        if elem in uniq_changed_ration:
+            clear_elem = elem
+        elif elem in name_mapping:
             clear_elem = name_mapping[elem]
         else:
             clear_elem = fix_name(elem)
@@ -56,10 +58,10 @@ def extract_to_row(ration, nutrients, json_path):
 
         new_ration.append((clear_elem, val))
 
-    # if llm_elems:
-    #     cleans = llm_cleaning(list(llm_elems.values))
-    #     for k, v in cleans.items():
-    #         new_ration[llm_elems[k]][0] = v
+    if llm_elems:
+        cleans = llm_cleaning(list([llm_elems.values]))
+        for k, v in cleans.items():
+            new_ration[llm_elems[k]][0] = v
 
     new_ration_dct = {i[0] : j[0] for i, j in zip(ration, new_ration)}
 
@@ -145,6 +147,7 @@ def predict_importance_acids(data, acid, name,
                 amount_of_neg += 1
 
     output_dir = name.split('/')[-1][:-5]
+    print(output_dir)
     if not os.path.exists(f"{graphics_path}/{output_dir}"):
         os.makedirs(f"{graphics_path}/{output_dir}")
 
@@ -212,7 +215,6 @@ def predict_importance_nutri(data, name, nutri_path="models/classic_pipe/nutri",
         if not os.path.exists(f"{graphics_path}/{output_dir}"):
             os.makedirs(f"{graphics_path}/{output_dir}")
 
-        print(output_dir)
         shap.plots.waterfall(shap_values[0])
         plt.savefig(f"{graphics_path}/{output_dir}/{key}.png", dpi=300, bbox_inches="tight")
         plt.close()
@@ -249,6 +251,7 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
     data = load_data_from_json(json_report)
     data = clear_data(data)
 
+    print(json_report)
     importance_nutri_dict = predict_importance_nutri(data, json_report)
 
     data = data.to_numpy()
@@ -275,9 +278,9 @@ def predict_from_file(json_report, model_path="models/classic_pipe/acids"):
             for k, v in acids_dict.items()
         }
 
-        print(json_data["result_acids"])
+
     with open(json_report, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(json_data, f, ensure_ascii=False, indent=2)
 
     return acids_dict
 
@@ -305,9 +308,10 @@ def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
     grid.save(f"{graphics_path}/{output_dir}/uni_acids.png")
 
 
+
 if __name__ == '__main__':
     #print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
-    print(predict_from_file(json_report="desktop/reports/report_2025-10-07_1759855680.json",
+    print(predict_from_file(json_report="desktop/reports/fgh_2025-10-08_1759938451.json",
                            model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

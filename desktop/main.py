@@ -401,14 +401,15 @@ class MainWindow(QWidget):
         try:
             jsonname = os.path.splitext(os.path.basename(report_file))[0]
             md_path = "desktop/final_reports/" + jsonname + ".md"
-            write_report_files(
-                input_json_path=report_file,
-                out_report_md=md_path,
-                update_json_with_report=True,
-                copy_images=True   # todo: без картинок для серверной части
-            )
+            if not os.path.exists(md_path):
+                write_report_files(
+                    input_json_path=report_file,
+                    out_report_md=md_path,
+                    update_json_with_report=True,
+                    copy_images=True  # todo: без картинок для серверной части
+                )
 
-            create_md_webview(self.tab_report, "desktop/final_reports/" + jsonname + ".md")
+            create_md_webview(self.tab_report, md_path)
         except Exception as e:
             print(e) # todo: всплывающую ошибку
 

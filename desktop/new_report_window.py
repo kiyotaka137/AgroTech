@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread, pyqtSlot)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
+from .report import write_report_files
 
 ROWSLEFT = ['K (%)', 'aNDFom фуража (%)', 'СЖ (%)', 'CHO B3 медленная фракция (%)', 'Растворимая клетчатка (%)', 'Крахмал (%)', 'peNDF (%)', 'aNDFom (%)', 'ЧЭЛ 3x NRC (МДжоуль/кг)', 'CHO B3 pdNDF (%)', 'Сахар (ВРУ) (%)', 'НСУ (%)', 'ОЖК (%)', 'НВУ (%)', 'CHO C uNDF (%)', 'СП (%)', 'RD Крахмал 3xУровень 1 (%)']
 COLUMNSLEFT = ["Ингредиенты","%СВ"]
@@ -978,13 +979,24 @@ class NewReport(QDialog):
             # работа мл моделей
             try:
                 result_acids = predict_from_file(file_path)
+                jsonname = os.path.splitext(os.path.basename(file_path))[0]
+                md_path = "desktop/final_reports/" + jsonname + ".md"
+
+                write_report_files(
+                    input_json_path=file_path,
+                    out_report_md=md_path,
+                    update_json_with_report=True,
+                    copy_images=True  # todo: без картинок для серверной части
+                )
+
             except Exception as e:
-                mb = QMessageBox(self)
-                mb.setIcon(QMessageBox.Icon.Critical)
-                mb.setWindowTitle("Ошибка")
-                mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
-                mb.exec()
-                self.status_label.setText("Ошибка при сохранении JSON.")
+                print("ошибка в _finish", e)
+                # mb = QMessageBox(self)
+                # mb.setIcon(QMessageBox.Icon.Critical)
+                # mb.setWindowTitle("Ошибка")
+                # mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
+                # mb.exec()
+                # self.status_label.setText("Ошибка при сохранении JSON.")
                 os.remove(file_path)
 
             # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
@@ -995,12 +1007,14 @@ class NewReport(QDialog):
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
-            mb = QMessageBox(self)
-            mb.setIcon(QMessageBox.Icon.Critical)
-            mb.setWindowTitle("Ошибка")
-            mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            mb.exec()
-            self.status_label.setText("Ошибка при сохранении JSON.")
+            print("ошибка в _finish", e)
+
+            # mb = QMessageBox(self)
+            # mb.setIcon(QMessageBox.Icon.Critical)
+            # mb.setWindowTitle("Ошибка")
+            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
+            # mb.exec()
+            # self.status_label.setText("Ошибка при сохранении JSON.")
 
         finally:
             # Остановим анимацию, если была
@@ -1104,6 +1118,22 @@ class RefactorReport(NewReport):
         super().__init__(parent)
         self.json_path = None
 
+    def analyze_clicked(self):
+        self.analysis_started.emit()
+        self.analyze_btn.setEnabled(False)
+
+        self.worker.moveToThread(self.thread)
+
+        # Подключаем сигналы
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.error.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        # Запускаем
+        self.thread.start()
+
 
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
@@ -1116,10 +1146,16 @@ class RefactorReport(NewReport):
             # работа мл моделей
             try:
                 result_acids = predict_from_file(self.json_path)
-                data["result_acids"] = {
-                    k: float(v[0])
-                    for k, v in result_acids.items()
-                }
+                jsonname = os.path.splitext(os.path.basename(self.json_path))[0]
+                md_path = "desktop/final_reports/" + jsonname + ".md"
+
+                write_report_files(
+                    input_json_path=self.json_path,
+                    out_report_md=md_path,
+                    update_json_with_report=True,
+                    copy_images=True  # todo: без картинок для серверной части
+                )
+
             except Exception as e:
                 mb = QMessageBox(self)
                 mb.setIcon(QMessageBox.Icon.Critical)
@@ -1127,14 +1163,7 @@ class RefactorReport(NewReport):
                 mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
                 mb.exec()
                 self.status_label.setText("Ошибка при сохранении JSON.")
-
-
-            data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-
-            # Перезаписываем файл с добавленным результатом
-            with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
+                os.remove(self.json_path)
 
         except Exception as e:
             # Используем экземпляр QMessageBox для показа ошибки
@@ -1165,6 +1194,9 @@ class RefactorReport(NewReport):
                 pass
             self.analyze_btn.setEnabled(True)
             self._loading_dialog = None
+            self.analysis_finished.emit()
+            #self.close()
+
 
     def get_json_path(self, path):
         self.json_path = path
@@ -1324,6 +1356,8 @@ class AdminNewReport(NewReport):
 
             except Exception as e:
                 print("Ошибка при удалении полей:", e)
+
+
 class AnalysisWorker(QObject):
     finished = pyqtSignal(object)   # отдадим результат в GUI
     error = pyqtSignal(str)
@@ -1338,7 +1372,6 @@ class AnalysisWorker(QObject):
     @pyqtSlot()
     def run(self):
         try:
-            # ⚠️ внутри func НЕЛЬЗЯ трогать QWidget/GUI!
             result = self.func(*self.args, **self.kwargs)
             self.finished.emit(result)
         except Exception:

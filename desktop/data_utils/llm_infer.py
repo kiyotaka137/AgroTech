@@ -4,8 +4,8 @@ from transformers import AutoTokenizer
 from prompt import grammar_str, norm_prompt, sys_prompt
 
 
-model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-model_path = "models/Qwen2.5-0.5B-Instruct-f16.gguf"
+model_name = "Qwen/Qwen3-0.6B"
+model_path = "models/Qwen3-0.6B-Q8_0.gguf"
 grammar = LlamaGrammar.from_string(grammar_str)
 
 llm = Llama(
@@ -16,14 +16,15 @@ llm = Llama(
 )
 
 messages = [
-    {"role": "user", "content": norm_prompt.format(element="Жом свекловичный сухой")}
+    {"role": "user", "content": norm_prompt.format(element="Ячмень. сухой 53%")}
 ]
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 text = tokenizer.apply_chat_template(
     messages,
     tokenize=False,
-    add_generation_prompt=True
+    add_generation_prompt=True,
+    enable_thinking=False
 )
 
 

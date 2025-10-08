@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import (
     QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
     QStackedWidget, QDialog, QMessageBox
 )
-from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt, QFileSystemWatcher
+from PyQt6.QtGui import QIcon, QMovie
+from PyQt6.QtCore import Qt, QFileSystemWatcher, QPropertyAnimation, QEasingCurve
 
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
@@ -117,13 +117,12 @@ class MainWindow(QWidget):
         history_layout.addLayout(search_layout)
         history_layout.addWidget(self.history_list)
 
-        history_widget = QWidget()
-        history_widget.setLayout(history_layout)
-        history_widget.setObjectName("historyWidget")
-        history_widget.setMinimumWidth(230)
-        history_widget.setMaximumWidth(400)
+        self.history_widget = QWidget()
+        self.history_widget.setLayout(history_layout)
+        self.history_widget.setObjectName("historyWidget")
+        self.history_widget.setMinimumWidth(0)
+        self.history_widget.setMaximumWidth(400)
 
-        self.history_widget = history_widget
         self.history_widget.hide()
 
         # ===== Основное поле (Отчет) =====
@@ -156,9 +155,32 @@ class MainWindow(QWidget):
         report_widget = QWidget()
         report_widget.setLayout(report_layout)
 
+        # ===== Вкладка анализа =====
+        self.tab_analysis = QWidget()
+        analysis_layout = QVBoxLayout(self.tab_analysis)
+        analysis_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # GIF
+        self.gif_label = QLabel()
+        self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.movie = QMovie("cow.gif")
+        self.gif_label.setMovie(self.movie)
+
+        # Надписи
+        self.phrase_label = QLabel("Анализ таблицы моделью...")
+        self.phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        analysis_layout.addWidget(self.gif_label)
+        analysis_layout.addWidget(self.phrase_label)
+
+        # Добавляем вкладку в QTabWidget, но изначально выключаем
+        self.tabs.addTab(self.tab_analysis, "Анализ")
+        self.analysis_index = self.tabs.indexOf(self.tab_analysis)
+        self.tabs.setTabEnabled(self.analysis_index, False)
+
         # ===== Сплиттер =====
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(history_widget)
+        splitter.addWidget(self.history_widget)
         splitter.addWidget(report_widget)
         splitter.setHandleWidth(0)
         splitter.setChildrenCollapsible(False)
@@ -176,11 +198,33 @@ class MainWindow(QWidget):
         self.refresh_reports_list()
 
     def toggle_history(self):
-        """Сворачивает/раскрывает панель истории"""
-        if self.history_widget.isVisible():
-            self.history_widget.hide()
-        else:
+        """Плавное сворачивание/раскрытие панели истории"""
+        # Если уже идёт анимация — прерываем
+        if hasattr(self, "anim") and self.anim.state() == self.anim.State.Running:
+            return
+
+        start_width = self.history_widget.width()
+        end_width = 0 if self.history_widget.isVisible() else 230
+
+        # Если будем показывать — убедимся, что виджет отображается
+        if not self.history_widget.isVisible():
             self.history_widget.show()
+
+        # Создаём анимацию по свойству maximumWidth
+        self.anim = QPropertyAnimation(self.history_widget, b"maximumWidth")
+        self.anim.setDuration(350)  # длительность, мс
+        self.anim.setStartValue(start_width)
+        self.anim.setEndValue(end_width)
+        self.anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        # Когда анимация закончится — если свернули, скрываем
+        def on_finished():
+            if end_width == 0:
+                self.history_widget.hide()
+                self.history_widget.setMaximumWidth(230)  # вернуть ограничение
+
+        self.anim.finished.connect(on_finished)
+        self.anim.start()
 
     def load_reports_to_list(self):
         """Обновляет список отчетов и показывает историю"""
@@ -433,7 +477,6 @@ class MainWindow(QWidget):
         key_input.textChanged.connect(reset_error)
 
         dialog.exec()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

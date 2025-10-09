@@ -14,7 +14,6 @@ from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
     QEasingCurve, QThread, pyqtSignal, QObject, QTimer
 )
-from desktop.config import get_server_url
 
 
 from .report import create_md_webview, write_report_files,create_md_webview_for_Admin
@@ -29,8 +28,7 @@ class AdminMainWindow(QWidget):
     return_to_main_requested = pyqtSignal()
     def __init__(self):
         super().__init__()
-        server_url = get_server_url()
-        self.client = APIClient(server_url)
+        self.client = APIClient("http://localhost:8000")
         self.setWindowTitle("Шаблон интерфейса")
         self.setGeometry(100, 100, 1400, 800)
         self.report_loader = ReportLoader()

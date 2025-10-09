@@ -15,17 +15,20 @@ from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
     QEasingCurve, QThread, pyqtSignal, QObject, QTimer, QSize
 )
-from .config import get_server_url
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import NewReport, RefactorReport
 from .report import create_md_webview, write_report_files
 from .window_manager import window_manager
 from .api_client import APIClient
+#from .data_utils import init_llm_in_main_thread
+
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+
+        #init_llm_in_main_thread(n_ctx=1024, n_batch=128)  # один раз, в GUI-потоке
 
         self.setWindowTitle("Молочный Анализатор")
         self.setWindowIcon(QIcon("desktop/icons/window_icon.png"))
@@ -332,6 +335,7 @@ class MainWindow(QWidget):
 
         dialog.analysis_started.connect(self.show_analysis_tab)
         dialog.analysis_finished.connect(self.finish_analysis)
+        dialog.analysis_err.connect(self._show_error_message)
 
         dialog.exec()
         self.refresh_reports_list()
@@ -390,7 +394,6 @@ class MainWindow(QWidget):
                     input_json_path=report_file,
                     out_report_md=md_path,
                     update_json_with_report=True,
-                    copy_images=True  # todo: без картинок для серверной части
                 )
 
             create_md_webview(self.tab_report, md_path)
@@ -529,6 +532,13 @@ class MainWindow(QWidget):
         self.loading_text.setText(self.loading_phrases[self._phrase_index])
 
     
+    def _show_error_message(self, msg: str):
+        mb = QMessageBox()
+        mb.setIcon(QMessageBox.Icon.Critical)
+        mb.setWindowTitle("Ошибка")
+        mb.setText(msg)
+        mb.exec()
+    
 
     def finish_analysis(self):
         # Удаляем вкладку анализа, если она есть
@@ -552,8 +562,7 @@ def send_new_reports():
     Читает все JSON файлы из ./records, объединяет их и отправляет на сервер
     одним запросом через client.add_records().
     """
-    server_url = get_server_url()
-    client = APIClient(server_url)
+    client = APIClient("http://localhost:8000")
     records_path = Path("desktop/reports")
 
     all_records = []

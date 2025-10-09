@@ -7,6 +7,8 @@ from datetime import datetime
 import markdown
 import re
 import sys
+from urllib.parse import quote
+
 
 
 from PyQt6.QtCore import QUrl
@@ -95,6 +97,25 @@ BASE_ALIASES = {
     "поташ": "буфер/минералы",
 }
 
+
+def _resolve_graph_path(key: str,
+                        graphics: dict[str, str],
+                        out_report_md: Path,
+                        default_filename: str | None = None) -> str | None:
+    """
+    Берём путь из JSON[graphics][key], иначе ищем в desktop/graphics/<report_id>/<default_filename|key+'.png'>
+    """
+    p = graphics.get(key)
+    if p:
+        return str(Path(p))
+    gdir = _graphics_dir_for(out_report_md)
+    if gdir:
+        name = default_filename or f"{key}.png"
+        cand = gdir / name
+        if cand.exists():
+            return str(cand)
+    return None
+
 def normalize_ingredient(name: str) -> str:
     raw = name.strip()
     if re.match(r"^\d{4}\.\d{2}\.\d{2}\.\d{1,2}\.\d{2}(?:\s*/\s*\d{2}\.\d{2}\.\d{4})?$", raw):
@@ -130,11 +151,11 @@ def normalize_ration_rows(rows: List[Dict[str, str]]) -> List[RationRow]:
 # ==========================
 
 DEFAULT_TARGETS: Dict[str, Tuple[Optional[float], Optional[float]]] = {
-    "Пальмитиновая": (25.0, 31.0),
-    "Стеариновая":   (8.0,  12.5),
-    "Олеиновая":     (22.0, 28.0),
-    "Линолевая":     (1.5,  3.5),
-    "Лауриновая":    (2.0,  4.4),  # обновлено по твоему правилу
+    "Лауриновая" : (2.0, 4.4),
+    "Линолевая" : (2.2, 5.0),
+    "Олеиновая" : (20.0, 28.0),
+    "Пальмитиновая" : (21.0, 32.0),
+    "Стеариновая" : (8.0, 13.5)  # обновлено по твоему правилу
 }
 
 def classify_acids(current: Dict[str, float],
@@ -177,42 +198,91 @@ def copy_asset(src: str | Path, assets_dir: Path, new_name: Optional[str] = None
         shutil.copy2(src_path, dst)
     return dst
 
-def render_acid_graphs_first(graphics: Dict[str, str], assets_dir: Optional[Path]) -> str:
-    """
-    Вставляет графики важности рациона на кислоты в начале отчёта.
-    Ключи — названия кислот. Если assets_dir указан — копируем картинки в assets/.
-    """
-    lines = ["\n## Важность рациона для жирных кислот (графики)\n"]
-    for acid in ACID_ORDER:
-        img_path = graphics.get(acid)
-        if not img_path:
-            continue
-        rel = img_path
-        if assets_dir is not None:
-            copied = copy_asset(img_path, assets_dir, new_name=f"{slug(acid)}.png")
-            if copied is not None:
-                rel = posix_path(Path("assets") / copied.name)
-        # Используем HTML <img> для гарантированного рендера локальных путей и контроля ширины
-        lines.append(f'**{acid}**  \n<img src="{rel}" alt="{acid}" width="720">')
-    if len(lines) == 1:
-        return ""  # ничего не добавлять, если нет картинок
-    return "\n\n".join(lines) + "\n"
 
-def render_other_graphs(graphics: Dict[str, str], assets_dir: Optional[Path]) -> str:
-    # Собираем графики по числовым ключам "0","1",...
-    numeric_keys = sorted([k for k in graphics.keys() if re.fullmatch(r"\d+", k)], key=lambda x: int(x))
-    if not numeric_keys:
-        return ""
+import re
+
+ACID_ORDER = ["Лауриновая", "Линолевая", "Олеиновая", "Пальмитиновая", "Стеариновая"]
+
+
+def to_file_url(p: str | Path) -> str:
+    p = Path(p).resolve().as_posix()
+    return "file:///" + quote(p, safe="/:")
+
+def _infer_report_id(out_report_md: Path) -> str:
+    # report_2025-10-07_1759855680.md → report_2025-10-07_1759855680
+    stem = out_report_md.stem
+    return stem[:-7] if stem.endswith("_report") else stem
+
+
+def _graphics_dir_for(out_report_md: Path) -> Path | None:
+    # ищем папку desktop рядом вверх по дереву
+    for parent in out_report_md.resolve().parents:
+        if parent.name.lower() == "desktop":
+            rep_id = _infer_report_id(out_report_md)
+            return (parent / "graphics" / rep_id).resolve()
+    return None
+
+def render_acid_graphs_first(graphics: dict[str, str],
+                                 out_report_md: Path) -> str:
+        """
+        1) Если есть сводный график 'uni' → показываем только его (в самом начале).
+        2) Иначе — показываем 5 графиков по кислотам (если найдены).
+        """
+        # 1) сводный 'uni'
+        uni_path = _resolve_graph_path("uni", graphics, out_report_md, default_filename="uni_acids.png")
+        print(uni_path)
+        if uni_path:
+            return (
+                "\n## Важность рациона для жирных кислот (сводный график)\n\n"
+                f'<img src="{to_file_url(uni_path)}" alt="uni_acids" width="960">\n'
+            )
+
+        # 2) по-кислотные графики
+        lines = ["\n## Важность рациона для жирных кислот (графики)\n"]
+        any_added = False
+        for acid in ACID_ORDER:
+            path = _resolve_graph_path(acid, graphics, out_report_md, default_filename=f"{acid}.png")
+            if not path:
+                continue
+            lines.append(f'**{acid}**  \n<img src="{to_file_url(path)}" alt="{acid}" width="720">')
+            any_added = True
+
+        return ("\n\n".join(lines) + "\n") if any_added else ""
+
+
+def render_other_graphs(graphics: dict[str, str], out_report_md: Path) -> str:
+    """
+    Секция «прочие графики».
+    1) Если есть сводный график нутриентов 'uni_nutri' → показываем только его.
+    2) Иначе — показываем графики по числовым ключам "0","1",...
+       (или ищем их в desktop/graphics/<report_id>/<n>.png).
+    """
+    # 1) приоритет — сводный по нутриентам
+    uni_nutri_path = _resolve_graph_path("uni_nutri", graphics, out_report_md, default_filename="uni_nutri.png")
+    if uni_nutri_path:
+        return (
+            "\n## Нутриенты: сводный график\n\n"
+            f'<img src="{to_file_url(uni_nutri_path)}" alt="uni_nutri" width="960">\n'
+        )
+
+    # 2) фоллбэк — числовые ключи
+    keys = sorted([k for k in graphics.keys() if re.fullmatch(r"\d+", k)], key=lambda x: int(x))
     lines = ["\n## Прочие графики\n"]
-    for k in numeric_keys:
-        p = graphics[k]
-        rel = p
-        if assets_dir is not None:
-            copied = copy_asset(p, assets_dir, new_name=Path(p).name)
-            if copied is not None:
-                rel = posix_path(Path("assets") / copied.name)
-        lines.append(f'<img src="{rel}" alt="graph_{k}" width="720">')
-    return "\n\n".join(lines) + "\n"
+    any_added = False
+
+    if not keys:
+        # если JSON не содержит числовых ключей — попробуем 0..63 рядом в graphics/<report_id>
+        keys = [str(i) for i in range(64)]
+
+    for k in keys:
+        path = _resolve_graph_path(k, graphics, out_report_md, default_filename=f"{k}.png")
+        if not path:
+            continue
+        lines.append(f'<img src="{to_file_url(path)}" alt="graph_{k}" width="720">')
+        any_added = True
+
+    return ("\n\n".join(lines) + "\n") if any_added else ""
+
 
 def render_ration_table(ration: List[RationRow]) -> str:
     lines = ["\n## Состав рациона (по % СВ)\n",
@@ -298,20 +368,15 @@ def render_importance_for_nutrients(importance_nutrient: Dict[str, Dict[str, flo
         lines.append("")
     return "\n".join(lines)
 
-def build_report(doc: Dict, copy_images: bool = True, out_dir: Optional[Path] = None) -> str:
+
+def build_report(doc: dict, out_report_md: Path) -> str:
     meta = doc.get("meta", {}) or {}
-    ration_rows = doc.get("ration_rows", []) or []
     acids = doc.get("result_acids", {}) or {}
+    graphics = doc.get("graphics", {}) or {}
     importance_acid = doc.get("importance_acid", {}) or {}
     importance_nutrient = doc.get("importance_nutrient", {}) or {}
-    graphics = doc.get("graphics", {}) or {}
-
+    ration_rows = doc.get("ration_rows", []) or []
     ration = normalize_ration_rows(ration_rows)
-
-    # где хранить ассеты
-    assets_dir = None
-    if copy_images and out_dir is not None:
-        assets_dir = out_dir / "assets"
 
     parts = [
         REPORT_HEADER.format(
@@ -319,22 +384,21 @@ def build_report(doc: Dict, copy_images: bool = True, out_dir: Optional[Path] = 
             period=meta.get("period", "") or "-",
             now=datetime.now().strftime("%Y-%m-%d %H:%M")
         ),
-        # 1) Сначала — графики важности рациона на кислоты:
-        render_acid_graphs_first(graphics, assets_dir),
-        # 2) Таблица ЖК:
+        # 1) первыми — графики кислот из соседней graphics/
+        render_acid_graphs_first(graphics, out_report_md),
+        # 2) таблица ЖК
         render_acids_table(acids),
-        # 3) Важность факторов для кислот:
+        # 3) важности для кислот
         render_importance_for_acids(importance_acid),
-        # 4) Состав рациона:
+        # 4) состав рациона
         render_ration_table(ration),
-        # 5) Что увеличить/снизить для нутриентов:
+        # 5) нутриентные рекомендации
         render_importance_for_nutrients(importance_nutrient),
-        # 6) Прочие графики:
-        render_other_graphs(graphics, assets_dir),
-        "\n> Дисклеймер: рекомендации/веса — модельные ориентиры. "
-        "Перед изменениями проверяйте баланс СП/Энергии, крахмала, NDF, минералов и ограничений по жирам.\n"
+        # 6) прочие графики
+        render_other_graphs(graphics, out_report_md),
+        "\n> Дисклеймер: модельные ориентиры; проверяйте баланс рациона перед изменениями.\n"
     ]
-    return "\n".join([p for p in parts if p])  # убрать пустые секции
+    return "\n".join([p for p in parts if p])
 
 # ==========================
 # IO-ОБВЁРТКИ
@@ -349,37 +413,27 @@ def save_json(path: str | Path, data: Dict) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def write_report_files(input_json_path: str | Path,
-                       out_report_md: Optional[str | Path] = None,
-                       update_json_with_report: bool = True,
-                       copy_images: bool = True) -> Tuple[str, Optional[str]]:
-    """
-    Собирает отчёт и, при необходимости, копирует картинки в ./assets рядом с .md.
-    Возвращает (путь_к_json, путь_к_md_или_None)
-    """
+                       out_report_md: str | Path | None = None,
+                       update_json_with_report: bool = True) -> tuple[str, str]:
     input_json_path = Path(input_json_path)
     doc = load_json(input_json_path)
 
-    # Куда писать MD
     if out_report_md is None:
         stem = input_json_path.with_suffix("").name
-        out_report_md = input_json_path.with_name(stem + "_report.md")
+        out_report_md = input_json_path.with_name(stem + ".md")  # или "_report.md" — как тебе удобнее
     out_report_md = Path(out_report_md)
-    out_dir = out_report_md.parent
 
-    # Собрать отчёт
-    report_md = build_report(doc, copy_images=copy_images, out_dir=out_dir)
+    report_md = build_report(doc, out_report_md=out_report_md)
 
-    # Сохранить MD
-    out_dir.mkdir(parents=True, exist_ok=True)
-    with open(out_report_md, "w", encoding="utf-8") as f:
-        f.write(report_md)
+    out_report_md.parent.mkdir(parents=True, exist_ok=True)
+    out_report_md.write_text(report_md, encoding="utf-8")
 
-    # Приклеить в JSON
     if update_json_with_report:
         doc["report"] = report_md
         save_json(input_json_path, doc)
 
     return str(input_json_path), str(out_report_md)
+
 
 # ==========================
 # CLI

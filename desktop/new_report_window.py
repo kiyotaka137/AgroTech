@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QMovie, QColor, QFontDatabase
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
-from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread, pyqtSlot)
+from PyQt6.QtCore import (Qt, QTimer, QSize, pyqtSignal, QObject, QThread, pyqtSlot, QMetaObject)
 
 from desktop.data_utils import parse_excel_ration, parse_pdf_for_tables, predict_from_file
 from .report import write_report_files
@@ -28,6 +28,7 @@ COLUMNSRIGHT=["Нутриент","СВ"]
 class NewReport(QDialog):
     analysis_started = pyqtSignal()
     analysis_finished = pyqtSignal()
+    analysis_err = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -752,18 +753,17 @@ class NewReport(QDialog):
                     input_json_path=file_path,
                     out_report_md=md_path,
                     update_json_with_report=True,
-                    copy_images=True  # todo: без картинок для серверной части
                 )
 
             except Exception as e:
-                print("ошибка в 1_finish", e)
-                mb = QMessageBox(self)
-                mb.setIcon(QMessageBox.Icon.Critical)
-                mb.setWindowTitle("Ошибка")
-                mb.setText(f"Неизвестный ингридиент")
-                mb.exec()
-                self.status_label.setText("Ошибка при сохранении JSON.")
+                # вызываем сигнал вместо прямого QMessageBox
+                self.analysis_err.emit("Неизвестный ингредиент")
                 os.remove(file_path)
+                try:
+                    if file_path.exists():
+                        os.remove(file_path)
+                except Exception as remove_err:
+                    print("Ошибка при удалении файла:", remove_err)
 
         except Exception as e:
             print("ошибка в 2_finish", e)
@@ -914,7 +914,6 @@ class RefactorReport(NewReport):
                     input_json_path=self.json_path,
                     out_report_md=md_path,
                     update_json_with_report=True,
-                    copy_images=True  # todo: без картинок для серверной части
                 )
 
             except Exception as e:

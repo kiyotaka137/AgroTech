@@ -15,20 +15,18 @@ from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
     QEasingCurve, QThread, pyqtSignal, QObject, QTimer, QSize
 )
+
 from .report_loader import ReportLoader
 from .report_list_item import ReportListItem
 from .new_report_window import NewReport, RefactorReport
 from .report import create_md_webview, write_report_files
 from .window_manager import window_manager
 from .api_client import APIClient
-from .data_utils import init_llm_in_main_thread
 
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-
-        #init_llm_in_main_thread(n_ctx=1024, n_batch=128)  # один раз, в GUI-потоке
 
         self.setWindowTitle("Шаблон интерфейса")
         self.setGeometry(100, 100, 1400, 800)
@@ -594,6 +592,8 @@ def send_new_reports():
         print("Ошибка при отправке данных на сервер.")
     else:
         print(f"Успешно отправлено {len(all_records)} записей.")
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 

@@ -12,11 +12,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
-# from .llm_infer import llm_cleaning
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict, nutri_reverse
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
-
+from .llm_infer import llm_cleaning
 
 def fix_name(value):
     pattern = re.compile(r"\d{4}\.\d{2}\.(\d{2})\.?(\d{2})?")
@@ -63,20 +62,19 @@ def extract_to_row(ration, nutrients, json_path):
 
     # Нормализация через LLM тех, кого не распознали
     unknowns = list(llm_elems.keys())
+    # if unknowns:
+    #     for orig in unknowns:
+    #         idx = llm_elems[orig]
+    #         _, old_val = new_ration[idx]
+    #         random_name = random.choice(uniq_changed_ration) # к сожалению llm не заработала в связке, вариант чтобы не крашило
+    #         new_ration[idx] = (random_name, old_val)
+
     if unknowns:
-        for orig in unknowns:
-            idx = llm_elems[orig]
-            _, old_val = new_ration[idx]
-            random_name = random.choice(uniq_changed_ration) # к сожалению llm не заработала в связке, вариант чтобы не крашило
-            new_ration[idx] = (random_name, old_val)
+        cleans = llm_cleaning(unknowns)
+        for k, v in cleans.items():
+            new_ration[llm_elems[k]] = (v, new_ration[llm_elems[k]][1])
 
-    # if llm_elems:
-    #     cleans = llm_cleaning(list([llm_elems.values]))
-    #     for k, v in cleans.items():
-    #         new_ration[llm_elems[k]][0] = v
-
-    # Собираем словарь оригинал -> нормализовано
-    # (подчистим пробелы/переводы строк, чтобы ключи совпадали с тем, что в JSON)
+    print(new_ration)
 
     new_ration_dct = {orig: norm
                       for (orig, _), (norm, _) in zip(ration, new_ration)}
@@ -398,8 +396,8 @@ def make_uni_acids(name, graphics_path="desktop/graphics", grid_size=(2, 2)):
 
 
 if __name__ == '__main__':
-    #print(load_data_from_json("desktop/reports/report_2025-10-07_1759855680.json"))
-    print(predict_from_file(json_report="desktop/reports/report_2025-10-08_1759938513.json",
-                           model_path="models/classic_pipe/acids"))
+    print(load_data_from_json("desktop/reports/Тест_2025-10-09_1759962576.json"))
+    #print(predict_from_file(json_report="desktop/reports/report_2025-10-08_1759938513.json",
+    #                       model_path="models/classic_pipe/acids"))
     # print(predict_from_file(json_report="desktop/reports/Норм_2025-10-07_1759796029.json",
     #                        model_path="models/classic_pipe"))

@@ -111,30 +111,6 @@ class NewReport(QDialog):
         main_layout = QVBoxLayout(container)
         self.setLayout(main_layout)
 
-        '''# Поля ввода
-        fields_layout = QHBoxLayout()
-        name_lbl = QLabel("Имя:")
-        name_lbl.setFixedWidth(40)
-        self.name_edit = QLineEdit(placeholderText="Введите имя")
-        self.name_edit.setFixedWidth(220)
-
-        complex_lbl = QLabel("Комплекс:")
-        complex_lbl.setFixedWidth(80)
-        self.complex_edit = QLineEdit(placeholderText="Введите комплекс")
-        self.complex_edit.setFixedWidth(220)
-
-        period_lbl = QLabel("Дата:")
-        period_lbl.setFixedWidth(60)
-        self.period_edit = QLineEdit(placeholderText="например: 2025-01")
-        self.period_edit.setFixedWidth(160)
-
-        fields_layout.addWidget(name_lbl); fields_layout.addWidget(self.name_edit)
-        fields_layout.addSpacing(10)
-        fields_layout.addWidget(complex_lbl); fields_layout.addWidget(self.complex_edit)
-        fields_layout.addSpacing(10)
-        fields_layout.addWidget(period_lbl); fields_layout.addWidget(self.period_edit)
-        fields_layout.addStretch() '''
-
         # Поля ввода (одна строка)
         fields_layout = QHBoxLayout()
         name_lbl = QLabel("Имя:");
@@ -170,8 +146,6 @@ class NewReport(QDialog):
 
         # чтобы по высоте совпадало с инпутами
         btn_h = max(self.name_edit.sizeHint().height(), 28)
-        #self.excel_btn.setFixedHeight(btn_h)
-        #self.pdf_btn.setFixedHeight(btn_h)
 
         head_font = self.font()  # шрифт окна; доступен уже сейчас
 
@@ -195,19 +169,6 @@ class NewReport(QDialog):
 
         # добавляем строку в разметку ТЕПЕРЬ, после кнопок
         main_layout.addLayout(fields_layout)
-
-        # Кнопки Excel
-        ''' files_layout = QHBoxLayout()
-        files_layout.addStretch()
-
-        self.excel_btn = QPushButton("Excel"); self.excel_btn.clicked.connect(self.choose_excel_file)
-        self.pdf_btn = QPushButton("PDF"); self.pdf_btn.clicked.connect(self.choose_pdf_file)
-
-        files_layout.addWidget(self.excel_btn)
-        files_layout.addWidget(self.pdf_btn)
-
-        files_layout.addStretch()
-        main_layout.addLayout(files_layout) '''
 
         #контейнеры чтобб разделять на левую и правую часть
         left_container = QWidget()
@@ -477,8 +438,6 @@ class NewReport(QDialog):
         QTimer.singleShot(0, self.setup_columns_ratio)
 
         # Кнопка "Анализировать"
-        #analyze_layout = QHBoxLayout()
-        #analyze_layout.addStretch()
         self.analyze_btn = QPushButton("Анализировать")
 
         # Крупнее и жирнее только для этой кнопки
@@ -509,33 +468,7 @@ class NewReport(QDialog):
         shadow.setColor(QColor(0, 0, 0, 60))
         self.analyze_btn.setGraphicsEffect(shadow)
 
-        #self.analyze_btn.setFixedSize(400, 50)
         self.analyze_btn.clicked.connect(self.analyze_clicked)
-        #analyze_layout.addWidget(self.analyze_btn)
-        #analyze_layout.addStretch()
-        #analyze_layout.addStretch()
-        #main_layout.addLayout(analyze_layout)
-
-        '''# нижняя полоса: слева кнопки левой таблицы, справа/по центру — уже созданная self.analyze_btn
-        bottom_layout = QHBoxLayout()
-        bottom_layout.setContentsMargins(12, 10, 12, 10)
-        bottom_layout.setSpacing(12)
-
-        # две кнопки для левой таблицы (переехали вниз)
-        self.btn_add_row_left = self._make_button("Добавить строку", self.add_row_for_left_table)
-        self.btn_remove_row_left = self._make_button("Удалить выделенные", self.remove_selected_for_left_table)
-
-        bottom_layout.addWidget(self.btn_add_row_left)
-        bottom_layout.addWidget(self.btn_remove_row_left)
-
-        bottom_layout.addStretch()
-
-        # НЕ создаём кнопку заново — используем уже существующую self.analyze_btn
-        bottom_layout.addWidget(self.analyze_btn)
-
-        bottom_layout.addStretch()
-
-        main_layout.addLayout(bottom_layout)'''
 
         # 1) Нижняя строка с утилитами слева (атрибут)
         self.bottom_tools_layout = QHBoxLayout()
@@ -617,30 +550,6 @@ class NewReport(QDialog):
         # первый автоподгон футера
         QTimer.singleShot(0, self._fit_footer_by_one_row)
 
-        '''def _lower_footer_by_one_row_safe():
-            try:
-                row_h = self.right_table.verticalHeader().defaultSectionSize()
-
-                footer_layout = self.footer.layout()
-                m = footer_layout.contentsMargins()
-                spacing = footer_layout.spacing()
-
-                # реальные размеры вложенных строк
-                tools_h = bottom_tools_layout.sizeHint().height()
-                center_h = max(bottom_center_layout.sizeHint().height(),
-                               self.analyze_btn.sizeHint().height())
-
-                # минимальная высота, чтобы ничего не обрезалось
-                content_min = m.top() + tools_h + spacing + center_h + m.bottom()
-
-                # целим «опустить границу» на высоту одной строки, но не меньше контента
-                target_h = max(content_min, content_min - row_h)
-
-                self.footer.setFixedHeight(int(target_h))
-            except Exception:
-                pass
-
-        QTimer.singleShot(0, _lower_footer_by_one_row_safe)'''
 
     def _row_px(self) -> int:
         """Реальная высота строки правой таблицы (если нет строк — дефолт секции)."""
@@ -806,10 +715,6 @@ class NewReport(QDialog):
 
                 value_item.setText(fmt(value))
 
-                # Устанавливаем выравнивание и флаги
-                # value_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                # value_item.setFlags(value_item.flags() | Qt.ItemFlag.ItemIsEditable)
-
 
     def choose_excel_file(self):  # todo: после того как будет переделанна функция парсинга пофиксить для двух таблиц
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать Excel/CSV", "", "Excel/CSV files (*.xlsx *.xls *.csv);;Все файлы (*)")
@@ -850,82 +755,13 @@ class NewReport(QDialog):
                 text = item.text() if item is not None else ""
                 if text.strip():
                     empty_row = False
-                row_data[col_name] = text
+                row_data[col_name] = text.replace("\n", " ")
 
             if not empty_row:
                 rows.append(row_data)
 
         return rows
 
-
-    # def analyze_clicked(self):
-    #     """
-    #     При нажатии: показываем модальное окно загрузки (имитация) 5 секунд,
-    #     затем собираем таблицу в JSON и сохраняем файл в папке reports.
-    #     """
-    #     # Отключаем кнопку чтобы избежать повторных нажатий
-    #     self.analyze_btn.setEnabled(False)
-
-    #     # --- Создаём простое модальное окно загрузки с GIF ---
-    #     loading = QDialog(self)
-    #     loading.setWindowTitle("Анализ — загрузка")
-    #     loading.setModal(True)
-    #     loading.setWindowModality(Qt.WindowModality.ApplicationModal)
-    #     loading.resize(360, 180)
-
-    #     layout = QVBoxLayout(loading)
-    #     layout.setContentsMargins(12, 12, 12, 12)
-    #     layout.setSpacing(8)
-
-    #     # Путь к GIF — пробуем несколько мест (корректируй по своему проекту)
-    #     gif_path = "cow.gif"
-    #     movie = None
-    #     try:
-    #         movie = QMovie(str(gif_path))
-    #     except Exception:
-    #         movie = None
-
-    #     gif_label = QLabel()
-    #     gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    #     if movie is not None and movie.isValid():
-    #         # При желании можно задать размер: movie.setScaledSize(QSize(96,96))
-    #         # movie.setScaledSize(QSize(96, 96))
-    #         gif_label.setMovie(movie)
-    #         movie.start()
-    #         # Сохраним в атрибуты, чтобы остановить позже
-    #         self._loading_movie = movie
-    #     else:
-    #         gif_label.setText("Загрузка...\n(анимация недоступна)")
-    #         gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    #     layout.addWidget(gif_label)
-
-    #     # Текст под GIF
-    #     lbl = QLabel("Анализ таблицы моделью...\n(имитация загрузки 5 секунд)")
-    #     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    #     layout.addWidget(lbl)
-
-    #     # Прогресс-бар только для UI (без реальной работы)
-    #     progress = QProgressBar()
-    #     progress.setRange(0, 0)  # бесконечный индикатор
-    #     layout.addWidget(progress)
-
-    #     # Покажем диалог и сохраним ссылку, чтобы закрыть позже
-    #     loading.show()
-    #     self._loading_dialog = loading
-
-    #     # 5 секунд "пустой" работы — placeholder
-    #     #QTimer.singleShot(5000, lambda: self._finish_analysis())
-
-    # def analyze_clicked(self):
-    #     # Сигнал — анализ начался
-    #     self.analysis_started.emit()
-    #     # Отключаем кнопку
-    #     self.analyze_btn.setEnabled(False)
-    #     self.close()
-    #     QTimer.singleShot(100, lambda: self._finish_analysis())
-    #     #self._finish_analysis()
 
     def on_text_changed(self, text):
         # Когда текст вводится — возвращаем прежний стиль
@@ -969,91 +805,70 @@ class NewReport(QDialog):
     def _finish_analysis(self):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
         loading_dialog = self._loading_dialog
+            # try:
+        data = {
+            "meta": {
+                "name": self.name_edit.text(),
+                "complex": self.complex_edit.text(),
+                "period": self.period_edit.text(),
+                "excel": self.excel_path or None,
+                "created_at": datetime.now().isoformat()
+            },
+            "ration_rows": self._collect_table_data(self.left_table),
+            "nutrients_rows": self._collect_table_data(self.right_table)
+        }
 
+        # Формируем имя файла: имя_дата_время.json
+        safe_name = self.name_edit.text().strip() or "report"  # todo: имя Unnamed если без имени
+        # очищаем пробелы и запрещённые символы простым способом
+        safe_name = "".join(ch for ch in safe_name if ch.isalnum() or ch in ("-", "_")).strip() or "report"
+        filename = f"{safe_name}_{date.today().isoformat()}_{int(time.time())}.json"
+        file_path = self.reports_dir / filename
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        # работа мл моделей
+        # try:
+        result_acids = predict_from_file(file_path)
+        jsonname = os.path.splitext(os.path.basename(file_path))[0]
+        md_path = "desktop/final_reports/" + jsonname + ".md"
+
+        write_report_files(
+            input_json_path=file_path,
+            out_report_md=md_path,
+            update_json_with_report=True,
+        )
+
+        # except Exception as e:
+        #    print("ошибка в _finish", e)
+        #    os.remove(self.json_path)
+
+        # except Exception as e:
+        #     # Используем экземпляр QMessageBox для показа ошибки
+        #     print("ошибка в _finish", e)
+        #
+        # finally:
+        # Остановим анимацию, если была
         try:
-            data = {
-                "meta": {
-                    "name": self.name_edit.text(),
-                    "complex": self.complex_edit.text(),
-                    "period": self.period_edit.text(),
-                    "excel": self.excel_path or None,
-                    "created_at": datetime.now().isoformat()
-                },
-                "ration_rows": self._collect_table_data(self.left_table),
-                "nutrients_rows": self._collect_table_data(self.right_table)
-            }
+            if getattr(self, "_loading_movie", None) is not None:
+                try:
+                    self._loading_movie.stop()
+                except Exception:
+                    pass
+                self._loading_movie = None
+        except Exception:
+            pass
 
-            # Формируем имя файла: имя_дата_время.json
-            safe_name = self.name_edit.text().strip() or "report"  # todo: имя Unnamed если без имени
-            # очищаем пробелы и запрещённые символы простым способом
-            safe_name = "".join(ch for ch in safe_name if ch.isalnum() or ch in ("-", "_")).strip() or "report"
-            filename = f"{safe_name}_{date.today().isoformat()}_{int(time.time())}.json"
-            file_path = self.reports_dir / filename
-
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-            # работа мл моделей
-            try:
-                result_acids = predict_from_file(file_path)
-                jsonname = os.path.splitext(os.path.basename(file_path))[0]
-                md_path = "desktop/final_reports/" + jsonname + ".md"
-
-                write_report_files(
-                    input_json_path=file_path,
-                    out_report_md=md_path,
-                    update_json_with_report=True,
-                )
-
-            except Exception as e:
-                print("ошибка в 1_finish", e)
-                mb = QMessageBox(self)
-                mb.setIcon(QMessageBox.Icon.Critical)
-                mb.setWindowTitle("Ошибка")
-                mb.setText(f"Неизвестный ингридиент")
-                mb.exec()
-                self.status_label.setText("Ошибка при сохранении JSON.")
-                os.remove(file_path)
-
-            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-            #
-            # # Перезаписываем файл с добавленным результатом
-            # with open(file_path, "w", encoding="utf-8") as f:
-            #     json.dump(data, f, ensure_ascii=False, indent=2)
-
-        except Exception as e:
-            # Используем экземпляр QMessageBox для показа ошибки
-            print("ошибка в 2_finish", e)
-
-            # mb = QMessageBox(self)
-            # mb.setIcon(QMessageBox.Icon.Critical)
-            # mb.setWindowTitle("Ошибка")
-            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            # mb.exec()
-            # self.status_label.setText("Ошибка при сохранении JSON.")
-
-        finally:
-            # Остановим анимацию, если была
-            try:
-                if getattr(self, "_loading_movie", None) is not None:
-                    try:
-                        self._loading_movie.stop()
-                    except Exception:
-                        pass
-                    self._loading_movie = None
-            except Exception:
-                pass
-
-            # Закрываем окно загрузки и включаем кнопку
-            try:
-                if loading_dialog is not None:
-                    loading_dialog.close()
-            except Exception:
-                pass
-            self.analyze_btn.setEnabled(True)
-            self._loading_dialog = None
-            self.analysis_finished.emit()
-
+        # Закрываем окно загрузки и включаем кнопку
+        try:
+            if loading_dialog is not None:
+                loading_dialog.close()
+        except Exception:
+            pass
+        self.analyze_btn.setEnabled(True)
+        self._loading_dialog = None
+        self.analysis_finished.emit()
 
     # === JSON API ===
     def load_from_json(self, data, type_of_table):
@@ -1151,82 +966,63 @@ class RefactorReport(NewReport):
         """Вызывается по окончании 'загрузки' — формируем JSON и сохраняем файл"""
         loading_dialog = self._loading_dialog
 
-        try:
-            data = {
-                "meta": {
-                    "name": self.name_edit.text(),
-                    "complex": self.complex_edit.text(),
-                    "period": self.period_edit.text(),
-                    "excel": self.excel_path or None,
-                    "created_at": datetime.now().isoformat()
-                },
-                "ration_rows": self._collect_table_data(self.left_table),
-                "nutrients_rows": self._collect_table_data(self.right_table)
-            }
+        #try:
+        data = {
+            "meta": {
+                "name": self.name_edit.text(),
+                "complex": self.complex_edit.text(),
+                "period": self.period_edit.text(),
+                "excel": self.excel_path or None,
+                "created_at": datetime.now().isoformat()
+            },
+            "ration_rows": self._collect_table_data(self.left_table),
+            "nutrients_rows": self._collect_table_data(self.right_table)
+        }
 
-            with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+        with open(self.json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
-            # работа мл моделей
-            try:
-                result_acids = predict_from_file(self.json_path)
-                jsonname = os.path.splitext(os.path.basename(self.json_path))[0]
-                md_path = "desktop/final_reports/" + jsonname + ".md"
+        # работа мл моделей
+        #try:
+        result_acids = predict_from_file(self.json_path)
+        jsonname = os.path.splitext(os.path.basename(self.json_path))[0]
+        md_path = "desktop/final_reports/" + jsonname + ".md"
 
-                write_report_files(
-                    input_json_path=self.json_path,
-                    out_report_md=md_path,
-                    update_json_with_report=True,
-                )
+        write_report_files(
+            input_json_path=self.json_path,
+            out_report_md=md_path,
+            update_json_with_report=True,
+        )
 
-            except Exception as e:
-                print("ошибка в _finish", e)
-                # mb = QMessageBox(self)
-                # mb.setIcon(QMessageBox.Icon.Critical)
-                # mb.setWindowTitle("Ошибка")
-                # mb.setText(f"Проблема с прогоном моделей:\n{str(e)}")
-                # mb.exec()
-                # self.status_label.setText("Ошибка при сохранении JSON.")
-                os.remove(self.json_path)
+            #except Exception as e:
+            #    print("ошибка в _finish", e)
+            #    os.remove(self.json_path)
 
-            # data["report"] = "\n".join([k + " " + str(v[0]) for k, v in result_acids.items()]) # todo: переделать в норм отчет
-            #
-            # # Перезаписываем файл с добавленным результатом
-            # with open(file_path, "w", encoding="utf-8") as f:
-            #     json.dump(data, f, ensure_ascii=False, indent=2)
-
-        except Exception as e:
-            # Используем экземпляр QMessageBox для показа ошибки
-            print("ошибка в _finish", e)
-
-            # mb = QMessageBox(self)
-            # mb.setIcon(QMessageBox.Icon.Critical)
-            # mb.setWindowTitle("Ошибка")
-            # mb.setText(f"Не удалось сохранить JSON:\n{str(e)}")
-            # mb.exec()
-            # self.status_label.setText("Ошибка при сохранении JSON.")
-
-        finally:
+        # except Exception as e:
+        #     # Используем экземпляр QMessageBox для показа ошибки
+        #     print("ошибка в _finish", e)
+        #
+        # finally:
             # Остановим анимацию, если была
-            try:
-                if getattr(self, "_loading_movie", None) is not None:
-                    try:
-                        self._loading_movie.stop()
-                    except Exception:
-                        pass
-                    self._loading_movie = None
-            except Exception:
-                pass
+        try:
+            if getattr(self, "_loading_movie", None) is not None:
+                try:
+                    self._loading_movie.stop()
+                except Exception:
+                    pass
+                self._loading_movie = None
+        except Exception:
+            pass
 
-            # Закрываем окно загрузки и включаем кнопку
-            try:
-                if loading_dialog is not None:
-                    loading_dialog.close()
-            except Exception:
-                pass
-            self.analyze_btn.setEnabled(True)
-            self._loading_dialog = None
-            self.analysis_finished.emit()
+        # Закрываем окно загрузки и включаем кнопку
+        try:
+            if loading_dialog is not None:
+                loading_dialog.close()
+        except Exception:
+            pass
+        self.analyze_btn.setEnabled(True)
+        self._loading_dialog = None
+        self.analysis_finished.emit()
 
 
     def get_json_path(self, path):

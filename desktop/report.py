@@ -11,7 +11,6 @@ from urllib.parse import quote
 
 
 
-#from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import QWidget, QTextEdit, QTextBrowser, QVBoxLayout
 

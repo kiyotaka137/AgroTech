@@ -45,11 +45,6 @@ class AdminMainWindow(QWidget):
         sidebar_layout.setContentsMargins(5, 40, 0, 0)
         sidebar_layout.setSpacing(10)
 
-        # self.btn_add_sidebar = QPushButton()
-        # self.btn_add_sidebar.setIcon(QIcon("desktop/icons/add_report.png"))
-        # self.btn_add_sidebar.setIconSize(QtCore.QSize(26, 26))
-        # self.btn_add_sidebar.setFixedSize(32, 32)
-        # self.btn_add_sidebar.clicked.connect(self.create_new_report)
 
         self.btn_load_reports = QPushButton()
         self.btn_load_reports.setIcon(QIcon("desktop/icons/history.png"))
@@ -162,28 +157,6 @@ class AdminMainWindow(QWidget):
         report_widget = QWidget()
         report_widget.setLayout(report_layout)
 
-        # # ===== Вкладка анализа =====
-        # self.tab_analysis = QWidget()
-        # analysis_layout = QVBoxLayout(self.tab_analysis)
-        # analysis_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # # GIF
-        # self.gif_label = QLabel()
-        # self.gif_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.movie = QMovie("desktop/icons/loading_trans.gif")
-        # self.gif_label.setMovie(self.movie)
-
-        # # Надписи
-        # self.phrase_label = QLabel("Анализ таблицы моделью...")
-        # self.phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # analysis_layout.addWidget(self.gif_label)
-        # analysis_layout.addWidget(self.phrase_label)
-
-        # # Добавляем вкладку в QTabWidget, но изначально выключаем
-        # self.tabs.addTab(self.tab_analysis, "Анализ")
-        # self.analysis_index = self.tabs.indexOf(self.tab_analysis)
-        # self.tabs.setTabEnabled(self.analysis_index, False)
 
         # ===== Сплиттер =====
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -328,174 +301,12 @@ class AdminMainWindow(QWidget):
 
         # Отображаем текстовый отчет
         create_md_webview_for_Admin(self.tab_report,report_text)
-        '''
-        """
-        Загружает и отображает отчёт. Берём реальный путь файла из UserRole.
-        item — QListWidgetItem (передаётся сигналом itemClicked).
-        """
-        if item is None:
-            return
-        
-        report_file = item.data(Qt.ItemDataRole.UserRole)
-
-        #print(report_file )# путь находится правильно
-        #снизу в комменте какой то бред
-        
-        if not report_file:
-            # fallback: пробуем получить текст из виджета
-            widget = self.history_list.itemWidget(item)
-            if widget is None:
-                return
-            try:
-                lbl_name = widget.layout().itemAt(0).widget()
-                report_name = lbl_name.text()
-                report_file = str(self.reports_dir / f"{report_name}.json")
-            except Exception:
-                return
-        
-        # Попытка загрузить сначала по полному пути, затем по basename(зачем это надо)
-        report_data = self.report_loader.load_report(report_file)
-        #print(report_data)
-
-        ration_array = report_data.get("ration_rows", None)
-        nutrient_array = report_data.get("nutrients_rows", None)
-
-        #print("массив с рационом",ration_array) #работает
-        self.tab_ration_widget.get_json_path(report_file)
-        self.tab_ration_widget.load_from_json(ration_array,"left")
-        self.tab_ration_widget.load_from_json(nutrient_array,"right")
-
-        self.ration_stack.setCurrentIndex(0)  # показываем виджет-рацион
-
-        shown = False
-
-        # Попробуем загрузить через специализированный метод рациона
-        try:
-            if ration_array is not None and hasattr(self.tab_ration_widget, "load_from_json"):
-                
-                shown = True
-        except Exception as e:
-            print(f"Ошибка при загрузке рациона через load_from_json: {e}")
-            shown = False
-        # fallback: показать сырой текст файла (или repr данных)
-        raw = None
-        try:
-            # пытаемся открыть файл как текст
-            with open(report_file, "r", encoding="utf-8") as f:
-                raw = f.read()
-        except Exception:
-            try:
-                raw = str(report_data)
-            except Exception:
-                raw = "Не удалось прочитать содержимое файла."
-
-            # отображаем в QTextEdit (страница 1)
-            self.tab_ration_debug.setPlainText(raw)
-            self.ration_stack.setCurrentIndex(1)
-
-        # === Текстовый отчет ===
-        report_text = report_data.get("report", "")
-        self.tab_report.setPlainText(report_text or "")
-    '''
-    '''
-    def on_reports_dir_changed(self, path):
-        """
-        Вызывается QFileSystemWatcher при изменении папки reports.
-        Обновляем список с небольшим debounce.
-        """
-        QtCore.QTimer.singleShot(100, self.refresh_reports_list)
-    '''
 
     def show_access_key_dialog(self):
         """Минимальное уведомление о режиме администратора"""
         QMessageBox.information(self, " ", "Вы уже в  режиме администратора")
 
-    # def show_analysis_tab(self):
-    #     # Скрываем старые вкладки
-    #     self.tabs.setTabEnabled(self.tabs.indexOf(self.ration_stack), False)
-    #     self.tabs.setTabEnabled(self.tabs.indexOf(self.tab_report), False)
 
-    #     # Включаем вкладку Анализ и переключаемся на неё
-    #     self.tabs.setTabEnabled(self.analysis_index, True)
-    #     self.tabs.setCurrentIndex(self.analysis_index)
-
-    #     # Запускаем GIF
-    #     self.movie.start()
-    '''
-    def show_analysis_tab(self):
-        """Добавляет временную вкладку 'Анализ' и показывает гифку"""
-        # Прячем существующие вкладки
-        self.saved_tabs = []
-        for i in reversed(range(self.tabs.count())):
-            text = self.tabs.tabText(i)
-            widget = self.tabs.widget(i)
-            self.saved_tabs.append((text, widget))
-            self.tabs.removeTab(i)
-
-        # Создаём вкладку 'Анализ'
-        self.analysis_tab = QWidget()
-        layout = QVBoxLayout(self.analysis_tab)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Гифка
-        gif_label = QLabel()
-        movie = QMovie("desktop/icons/loading_trans.gif")  # путь к гифке
-        gif_label.setMovie(movie)
-        movie.start()
-        layout.addWidget(gif_label)
-
-        # Надпись
-        self.loading_text = QLabel("Нейросети думают 🧠")
-        self.loading_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.loading_text)
-
-        # Фразы
-        self.loading_phrases = [
-            "Нейросети думают 🧠",
-            "Коровы жуют траву 🐄",
-            "Сенсор анализа травы перегревается 🌿🔥",
-            "Молоко почти готово 🥛",
-            "Идёт расчёт удоев... 📊",
-            "Думаем о будущем сельского хозяйства 🚜"
-        ]
-        self._phrase_index = 0
-
-        # Таймер для смены фраз
-        self.phrase_timer = QTimer(self)
-        self.phrase_timer.timeout.connect(self._change_phrase)
-        self.phrase_timer.start(2000)
-
-        # Добавляем вкладку
-        self.tabs.addTab(self.analysis_tab, "Анализ")
-        self.tabs.setCurrentWidget(self.analysis_tab)
-    '''
-    '''
-    def _change_phrase(self):
-        """Меняет текст под гифкой"""
-        if not hasattr(self, "loading_phrases") or not self.loading_phrases:
-            return
-        self._phrase_index = (self._phrase_index + 1) % len(self.loading_phrases)
-        self.loading_text.setText(self.loading_phrases[self._phrase_index])
-    '''
-    
-    '''
-    def finish_analysis(self):
-        # Удаляем вкладку анализа, если она есть
-        for i in range(self.tabs.count()):
-            if self.tabs.tabText(i) == "Анализ":
-                self.tabs.removeTab(i)
-                break
-
-        # Возвращаем остальные
-        for text, widget in reversed(self.saved_tabs):
-            self.tabs.addTab(widget, text)
-
-        # Возвращаем фокус на вкладку Рацион
-        for i in range(self.tabs.count()):
-            if self.tabs.tabText(i) == "Рацион":
-                self.tabs.setCurrentIndex(i)
-                break
-    '''
     def popa(self):
         window_manager.show_main_window()
 def send_new_reports(client: 'APIClient'):

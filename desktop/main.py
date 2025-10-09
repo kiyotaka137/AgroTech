@@ -31,9 +31,10 @@ class MainWindow(QWidget):
 
         self.setWindowTitle("Молочный Анализатор")
         self.setWindowIcon(QIcon("desktop/icons/window_icon.png"))
-        self.setGeometry(100, 100, 1400, 800)
+        self.setGeometry(200, 60, 1000, 600)
         self.report_loader = ReportLoader()
         self.all_reports = []  # для фильтрации
+        self.showMaximized()
 
         # Папка с отчетами (меняем в соответствии с твоим текущим расположением)
         self.reports_dir = Path("desktop/reports")

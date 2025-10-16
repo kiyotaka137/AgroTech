@@ -1,5 +1,6 @@
 # main.py
 import sys
+import requests
 import os
 from pathlib import Path
 import json
@@ -8,26 +9,21 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLineEdit, QLabel, QListWidget,
     QTabWidget, QTextEdit, QSplitter, QListWidgetItem,
-    QStackedWidget, QDialog, QMessageBox
+    QStackedWidget, QDialog
 )
 from PyQt6.QtGui import QIcon, QMovie, QFont
 from PyQt6.QtCore import (
     Qt, QFileSystemWatcher, QPropertyAnimation, 
-    QEasingCurve, QThread, pyqtSignal, QObject, QTimer, QSize
+    QEasingCurve, QTimer, QSize
 )
 
 from .report_loader import ReportLoader
-from .report_list_item import ReportListItem
-from .new_report_window import NewReport, RefactorReport
-from .report import create_md_webview, write_report_files
-from .window_manager import window_manager
-from .api_client import APIClient
+from .new_report_window import RefactorReport
 
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-
 
         self.setWindowTitle("Молочный Анализатор")
         self.setWindowIcon(QIcon("desktop/icons/window_icon.png"))
@@ -121,7 +117,7 @@ class MainWindow(QWidget):
         self.history_list = QListWidget()
         self.history_list.setObjectName("historyList")
         self.history_list.itemClicked.connect(self.display_report)
-        
+
         # Компоновка
         history_layout.addLayout(header_layout)
         history_layout.addLayout(search_layout)
@@ -146,22 +142,7 @@ class MainWindow(QWidget):
         tabs.tabBar().setDrawBase(False)  # ← убирает базовую линию под вкладками
 
         # --- Вкладка Рацион ---
-        # Используем QStackedWidget: страница 0 = RationTableWidget, страница 1 = текстовый просмотрщик (fallback)
-        self.tab_ration_widget = RefactorReport()
-
-        self.tab_ration_widget.analysis_started.connect(self.show_analysis_tab)
-        self.tab_ration_widget.analysis_finished.connect(self.finish_analysis)
-
-        self.refresh_reports_list()
-
-        self.tab_ration_debug = QTextEdit()
-        self.tab_ration_debug.setReadOnly(True)
-
-        self.ration_stack = QStackedWidget()
-        self.ration_stack.addWidget(self.tab_ration_widget)  # 0
-        self.ration_stack.addWidget(self.tab_ration_debug)   # 1
-
-        tabs.addTab(self.ration_stack, "Рацион")
+        self.tab_ration_widget = None
 
         # --- Вкладка Отчет ---
         self.tab_report = QWidget() # QTextEdit("Здесь содержимое вкладки 'Отчет'")
@@ -177,10 +158,10 @@ class MainWindow(QWidget):
         splitter.addWidget(report_widget)
         splitter.setHandleWidth(0)
         splitter.setChildrenCollapsible(False)
-        
-        splitter.setSizes([280, 1060])
 
-        # ===== Главный layout =====
+        splitter.setSizes([280, 1060])
+        #
+        # # ===== Главный layout =====
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -225,6 +206,7 @@ class MainWindow(QWidget):
         self.refresh_reports_list()
         self.toggle_history()
 
+
     def refresh_reports_list(self):
         """Обновляет содержимое history_list по текущему состоянию папки reports (без смены видимости)."""
         self.history_list.clear()
@@ -244,6 +226,7 @@ class MainWindow(QWidget):
 
         for report_file in report_files_sorted:
             self._add_report_to_list(report_file)
+
 
     def _add_report_to_list(self, report_file):
         """
@@ -294,6 +277,7 @@ class MainWindow(QWidget):
 
 
         # Создаём виджет и item
+        from .report_list_item import ReportListItem
         widget = ReportListItem(display_name, last_time_refactor)
         item = QListWidgetItem()
         item.setSizeHint(widget.sizeHint())
@@ -330,6 +314,8 @@ class MainWindow(QWidget):
                 self._add_report_to_list(report_file)
 
     def create_new_report(self):
+
+        from .new_report_window import NewReport
         dialog = NewReport(self)
 
         dialog.analysis_started.connect(self.show_analysis_tab)
@@ -338,6 +324,23 @@ class MainWindow(QWidget):
         dialog.exec()
         self.refresh_reports_list()
 
+    def create_tab_ration(self):
+
+        self.tab_ration_widget = RefactorReport()
+
+        self.tab_ration_widget.analysis_started.connect(self.show_analysis_tab)
+        self.tab_ration_widget.analysis_finished.connect(self.finish_analysis)
+
+        self.tab_ration_debug = QTextEdit()
+        self.tab_ration_debug.setReadOnly(True)
+
+        self.ration_stack = QStackedWidget()
+        self.ration_stack.addWidget(self.tab_ration_widget)  # 0
+        self.ration_stack.addWidget(self.tab_ration_debug)   # 1
+
+        self.tabs.addTab(self.ration_stack, "Рацион")
+
+
     def display_report(self, item):
         """
         Загружает и отображает отчёт. Берём реальный путь файла из UserRole.
@@ -345,6 +348,9 @@ class MainWindow(QWidget):
         """
         if item is None:
             return
+
+        if self.tab_ration_widget is None:
+            self.create_tab_ration()
 
         report_file = item.data(Qt.ItemDataRole.UserRole)
 
@@ -385,6 +391,8 @@ class MainWindow(QWidget):
         #report_text = report_data.get("report", "")
         #self.tab_report.setPlainText(report_text or "")
         try:
+            from .report import create_md_webview, write_report_files
+
             jsonname = os.path.splitext(os.path.basename(report_file))[0]
             md_path = "desktop/final_reports/" + jsonname + ".md"
             if not os.path.exists(md_path):
@@ -393,6 +401,7 @@ class MainWindow(QWidget):
                     out_report_md=md_path,
                     update_json_with_report=True,
                 )
+
 
             create_md_webview(self.tab_report, md_path)
         except Exception as e:
@@ -434,16 +443,39 @@ class MainWindow(QWidget):
         layout.addWidget(error_label)
         layout.addWidget(confirm_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
+        def check_api_available(url: str, timeout=5):
+            try:
+                response = requests.head(url, timeout=timeout)
+                return response.status_code == 200
+            except requests.RequestException:
+                return False
+
+
         def check_key():
             entered = key_input.text().strip()
             correct_key = "1234"  # <-- здесь можешь заменить на свой ключ
             if entered == correct_key:
-                dialog.accept()
-                window_manager.show_admin_window()
-                #функкция котора отправляет все новые reports
-                send_new_reports()
+
+                from dotenv import load_dotenv
+                load_dotenv()
+
+                if check_api_available(load_dotenv(os.getenv("SERVER_URL"))):
+                    from .window_manager import window_manager
+
+                    dialog.accept()
+                    window_manager.show_admin_window()
+                    send_new_reports()
+                else:
+                    key_input.setStyleSheet("""
+                        QLineEdit {
+                            border: 1px solid #d32f2f;
+                            background-color: #ffeaea;
+                            border-radius: 4px;
+                            padding: 4px;
+                        }
+                    """)
+                    error_label.setText("Сервер не активен")
             else:
-                # Выделяем ошибку визуально
                 key_input.setStyleSheet("""
                     QLineEdit {
                         border: 1px solid #d32f2f;
@@ -482,13 +514,10 @@ class MainWindow(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(25)
 
-        # Гифка — уменьшим размер
-        gif_label = QLabel()
-        movie = QMovie("desktop/icons/loading_trans.gif")
-        movie.setScaledSize(QSize(192, 96))  
-        gif_label.setMovie(movie)
-        movie.start()
-        layout.addWidget(gif_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        from .ui_busy import BusySpinner
+        self.spinner = BusySpinner(self, size=48, line_width=4, color="#0ea5e9")
+        layout.addWidget(self.spinner, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.spinner.start()
 
         # Надпись — крупный и мягкий шрифт
         self.loading_text = QLabel("Нейросети думают 🧠")
@@ -538,7 +567,7 @@ class MainWindow(QWidget):
                 self.tabs.removeTab(i)
                 break
 
-        # Возвращаем остальные
+        self.spinner.stop()
         for text, widget in reversed(self.saved_tabs):
             self.tabs.addTab(widget, text)
 
@@ -548,12 +577,15 @@ class MainWindow(QWidget):
                 self.tabs.setCurrentIndex(i)
                 break
 
+
 def send_new_reports():
     """
     Читает все JSON файлы из ./records, объединяет их и отправляет на сервер
     одним запросом через client.add_records().
     """
-    client = APIClient("http://localhost:8000")
+    from .api_client import APIClient
+
+    client = APIClient(os.getenv("SERVER_URL"))
     records_path = Path("desktop/reports")
 
     all_records = []
@@ -594,4 +626,6 @@ if __name__ == "__main__":
 
     window = MainWindow()
     window.show()
+    #QtCore.QTimer.singleShot(0, window._post_init)
+
     sys.exit(app.exec())

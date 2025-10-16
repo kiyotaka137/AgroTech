@@ -1,5 +1,8 @@
 from PyQt6.QtWidgets import QApplication
+from PyQt6 import QtCore
 import sys
+
+
 class WindowManager:
     def __init__(self):
         self.app = QApplication(sys.argv)
@@ -15,6 +18,7 @@ class WindowManager:
             self.current_window.close()
         self.current_window = MainWindow()
         self.current_window.show()
+
         return self.current_window
     
     def show_admin_window(self):

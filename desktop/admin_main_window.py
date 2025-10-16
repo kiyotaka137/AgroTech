@@ -1,5 +1,6 @@
 # main.py
 import sys
+import os
 from pathlib import Path
 
 from PyQt6 import QtCore
@@ -23,13 +24,16 @@ from .report_list_item import ReportListItem
 from .new_report_window import AdminNewReport
 from .api_client import APIClient
 from .window_manager import window_manager
+
+
 class AdminMainWindow(QWidget):
 
     return_to_main_requested = pyqtSignal()
     def __init__(self):
         super().__init__()
-        self.client = APIClient("http://localhost:8000")
-        self.setWindowTitle("Шаблон интерфейса")
+        self.client = APIClient(os.getenv("SERVER_URL"))
+        self.setWindowTitle("Молочный Анализатор(Администратор)")
+        self.setWindowIcon(QIcon("desktop/icons/window_icon.png"))
         self.setGeometry(100, 100, 1400, 800)
         self.report_loader = ReportLoader()
         self.all_reports = []  # для фильтрации
@@ -216,8 +220,7 @@ class AdminMainWindow(QWidget):
         """Обновляет содержимое history_list по текущему состоянию папки reports (без смены видимости)."""
         self.history_list.clear()
         names = self.client.get_all_names()
-        
-        for name in  names:
+        for name in names:
             self._add_report_to_list(name)
 
     def _add_report_to_list(self, display_name):

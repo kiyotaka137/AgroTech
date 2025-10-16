@@ -6,7 +6,6 @@ from pathlib import Path
 import shap
 import os
 import re
-import random
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -15,12 +14,19 @@ from PIL import Image, ImageDraw, ImageFont
 from .predictor import set_ensemble, ensemble_predict
 from .config import acids, for_dropping, medians_of_data, main_acids, nutri, nutri_for_predict, nutri_reverse
 from training import change_mapping, cultures, uniq_step, uniq_changed_ration, name_mapping, feed_types
-from .llm_infer import llm_cleaning
+
 
 def fix_name(value):
-    pattern = re.compile(r"\d{4}\.\d{2}\.(\d{2})\.?(\d{2})?")
-    match = pattern.search(value)
-    if not match:
+    code_pattern = re.compile(r"\d{4}\.\d{2}\.(\d{2})\.?(\d{2})?")
+    match = code_pattern.search(value)
+
+    name_pattern = r'\b(' + '|'.join(re.escape(w) for w in uniq_changed_ration) + r')\b'
+    name_match = re.search(name_pattern, value, flags=re.IGNORECASE)
+
+    if name_match:
+        return name_match.group(1)
+
+    if not match and not name_match:
         return None
 
     groups = match.groups()
@@ -44,7 +50,6 @@ def extract_to_row(ration, nutrients, json_path):
 
     name_mapping = change_mapping()
     new_ration = []
-    llm_elems = {}  # {исходная_строка: индекс в new_ration}
 
     for i, (elem, val) in enumerate(ration):
         if elem in uniq_changed_ration:
@@ -54,25 +59,9 @@ def extract_to_row(ration, nutrients, json_path):
         else:
             clear_elem = fix_name(elem)
             if clear_elem is None:
-                llm_elems[elem] = len(new_ration)  # индекс где положим сейчас
+                clear_elem = uniq_changed_ration[0]
 
         new_ration.append((clear_elem, val))
-
-    print(new_ration)
-
-    # Нормализация через LLM тех, кого не распознали
-    unknowns = list(llm_elems.keys())
-    # if unknowns:
-    #     for orig in unknowns:
-    #         idx = llm_elems[orig]
-    #         _, old_val = new_ration[idx]
-    #         random_name = random.choice(uniq_changed_ration) # к сожалению llm не заработала в связке, вариант чтобы не крашило
-    #         new_ration[idx] = (random_name, old_val)
-
-    if unknowns:
-        cleans = llm_cleaning(unknowns)
-        for k, v in cleans.items():
-            new_ration[llm_elems[k]] = (v, new_ration[llm_elems[k]][1])
 
     print(new_ration)
 
